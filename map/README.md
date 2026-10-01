@@ -29,4 +29,7 @@ statistics), "more information" dialog, zoom (buttons, mouse wheel, pinch) and p
 
 - `js/worldmap.js` – country outlines as SVG path strings (`var worldmap = {width, height, shapes}`).
 - `js/countrycodes.js` – ISO code to country name lookup (reference for building `data.json`; not loaded by the page).
-- `server-side/dataConversion.php` – converts a CSV (`input.csv`, first column = region id) into JSON (`out.json`).
+- `server-side/dataConversion.php` – converts a CSV table into `data.json`
+  (`php dataConversion.php input.csv data.json`). The first column is the region
+  id, the other columns become fields named by their headers (add a `label`
+  column for display names); output has region ids at the top level, as the page expects.

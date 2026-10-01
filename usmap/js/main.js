@@ -18,6 +18,9 @@ const NO_DATA_FILL = '#ccc';
 const ZOOM_IN = 0.75; // viewBox multiplier per zoom-in step
 const ZOOM_OUT = 1.25;
 const MIN_ZOOM = 0.05; // smallest viewBox width as a share of the map width
+// Above this many clickable regions (e.g. 3000+ US counties) the regions are not
+// tab stops; keyboard users use the "Find a region" box instead.
+const FOCUSABLE_LIMIT = 300;
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -289,7 +292,7 @@ class MapVis {
     const svg = svgEl('svg', {
       viewBox: `${this.full.x} ${this.full.y} ${width} ${height}`,
       preserveAspectRatio: 'xMidYMid meet',
-      role: 'img',
+      role: 'group',
       'aria-label': document.title,
     });
     svg.style.setProperty(
@@ -297,18 +300,34 @@ class MapVis {
       this.features.countryHighlightColor || DEFAULT_HIGHLIGHT
     );
     const group = svgEl('g', { class: 'regions' });
+    const withData = [];
     for (const [id, d] of Object.entries(this.image.shapes)) {
       const key = this.dataKey(id);
       const path = svgEl('path', { d, id: 'region-' + id, class: 'region', fill: this.fillFor(key) });
       path.dataset.id = id;
+      this.regions.set(id, { path, key });
       if (key) {
         path.classList.add('has-data');
         path.dataset.key = key;
+        withData.push({ id, path, label: String(this.labelFor(key)) });
+      } else {
+        path.setAttribute('aria-hidden', 'true');
+        group.append(path);
       }
-      this.regions.set(id, { path, key });
+    }
+    // Regions with data go last, in label order, so Tab moves through them alphabetically.
+    withData.sort((a, b) => a.label.localeCompare(b.label));
+    const focusable = withData.length <= FOCUSABLE_LIMIT;
+    for (const { path, label } of withData) {
+      if (focusable) {
+        path.setAttribute('tabindex', '0');
+        path.setAttribute('role', 'button');
+        path.setAttribute('aria-label', label);
+      }
       group.append(path);
     }
     svg.append(group);
+    this.initRegionFinder(withData);
     this.mapEl.replaceChildren(svg);
     this.svg = svg;
 
@@ -319,6 +338,70 @@ class MapVis {
         : { ...this.full };
     this.applyView();
     this.initPointer();
+  }
+
+  labelFor(key) {
+    const row = this.data[key];
+    return row && row.label !== undefined && row.label !== null && row.label !== '' ? row.label : key;
+  }
+
+  /** Show a region's information, mark it as selected and optionally zoom to it. */
+  selectRegion(id, { zoom = false } = {}) {
+    const region = this.regions.get(id);
+    if (!region || !region.key) return;
+    this.svg.querySelector('.region.selected')?.classList.remove('selected');
+    region.path.classList.add('selected');
+    this.showInfo(this.labelFor(region.key), this.data[region.key]);
+    if (zoom) this.zoomTo(region.path);
+  }
+
+  zoomTo(path) {
+    const box = path.getBBox();
+    const f = this.full;
+    const width = Math.min(Math.max(box.width * 6, box.height * 6, f.width * MIN_ZOOM * 2), f.width);
+    const height = width * (f.height / f.width);
+    this.view = {
+      x: box.x + box.width / 2 - width / 2,
+      y: box.y + box.height / 2 - height / 2,
+      width,
+      height,
+    };
+    this.applyView();
+  }
+
+  /** Keyboard/screen-reader route to every region: a text box with suggestions. */
+  initRegionFinder(regions) {
+    const input = $('#regionsearch');
+    const list = $('#regionlist');
+    if (!input || !list) return;
+    if (!regions.length) {
+      $('#regionfinder').hidden = true;
+      return;
+    }
+    const byLabel = new Map();
+    for (const { id, label } of regions) {
+      const k = label.toLocaleLowerCase();
+      if (byLabel.has(k)) continue;
+      byLabel.set(k, id);
+      list.append(el('option', { value: label }));
+    }
+    const go = () => {
+      const id = byLabel.get(input.value.trim().toLocaleLowerCase());
+      input.setAttribute('aria-invalid', String(!id && input.value.trim() !== ''));
+      if (id) this.selectRegion(id, { zoom: true });
+      return id;
+    };
+    // Picking a suggestion fires "input" with the full value.
+    input.addEventListener('input', () => {
+      if (byLabel.has(input.value.trim().toLocaleLowerCase())) go();
+      else input.removeAttribute('aria-invalid');
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        go();
+      }
+    });
   }
 
   applyView() {
@@ -418,7 +501,7 @@ class MapVis {
         hideTooltip();
         return;
       }
-      tooltip.textContent = this.data[path.dataset.key].label ?? path.dataset.key;
+      tooltip.textContent = this.labelFor(path.dataset.key);
       tooltip.hidden = false;
       const pad = 14;
       const { innerWidth: w, innerHeight: h } = window;
@@ -440,9 +523,15 @@ class MapVis {
     svg.addEventListener('click', (e) => {
       if (moved > 4) return; // that was a drag, not a click
       const path = e.target.closest?.('.region.has-data');
+      if (path) this.selectRegion(path.dataset.id);
+    });
+
+    svg.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const path = e.target.closest?.('.region.has-data');
       if (!path) return;
-      const row = this.data[path.dataset.key];
-      this.showInfo(row.label ?? path.dataset.key, row);
+      e.preventDefault();
+      this.selectRegion(path.dataset.id);
     });
 
     svg.addEventListener(
@@ -466,6 +555,7 @@ class MapVis {
   initPanel() {
     $('#attributepane .left-close').addEventListener('click', () => {
       $('#attributepane').hidden = true;
+      this.svg.querySelector('.region.selected')?.classList.remove('selected');
     });
   }
 

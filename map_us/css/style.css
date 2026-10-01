@@ -94,8 +94,48 @@ a {
   cursor: pointer;
 }
 
-.region.has-data:hover {
+.region.has-data:hover,
+.region.has-data:focus-visible {
   fill: var(--highlight);
+}
+
+.region.has-data:focus {
+  outline: none;
+}
+
+.region.has-data:focus-visible,
+.region.selected {
+  stroke: #000;
+  stroke-width: 1.5;
+}
+
+.region.has-data:focus-visible {
+  stroke-width: 2.5;
+}
+
+/* ---------- region finder ---------- */
+
+.regionfinder {
+  margin-bottom: 12px;
+}
+
+.regionfinder label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+
+.regionfinder input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #999;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.regionfinder input[aria-invalid='true'] {
+  border-color: #c33;
 }
 
 .tooltip {
@@ -296,6 +336,13 @@ a {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.7) no-repeat center;
   cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid #1a73e8;
+  outline-offset: 2px;
 }
 
 #zoom .z:hover,

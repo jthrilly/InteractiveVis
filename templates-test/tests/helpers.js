@@ -1,8 +1,10 @@
 import { expect } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR || join(import.meta.dirname, '..', 'screenshots');
+const here = dirname(fileURLToPath(import.meta.url));
+export const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR || join(here, '..', 'screenshots');
 
 /** Collect console errors and uncaught exceptions for the page. */
 export function trackErrors(page) {

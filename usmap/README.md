@@ -39,5 +39,6 @@ statistics), "more information" dialog, zoom (buttons, mouse wheel, pinch) and p
   plus a `data.csv` skeleton (FIPS, name and random sample columns).
 - `js/states_process.py` – the same projection for `usstates.json`; writes `usstates.js`
   (rename its variable to `states` to match the checked-in file).
-- `svg2js.py` – Python 2 helper that lists the path ids of an SVG file (set the
-  input file name in the script); used to build the excluded-county list in `process.py`.
+- `svg2js.py` – prints the path ids of an SVG file, one per line
+  (`python3 svg2js.py unwanted.svg`); used to build the excluded-county list
+  (`dontwant`) in `process.py`.
