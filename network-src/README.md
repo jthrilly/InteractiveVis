@@ -1,12 +1,14 @@
-# network-v3
+# network-src
 
-The InteractiveVis network viewer rebuilt on [sigma.js 3](https://www.sigmajs.org/) and
-[graphology](https://graphology.github.io/). It reads the same `config.json` and `data.json`
-that the sigmaexporter Gephi plugin writes today, so existing exports keep working.
+Source of the InteractiveVis network viewer, built on [sigma.js 3](https://www.sigmajs.org/)
+and [graphology](https://graphology.github.io/). It reads the same `config.json` and
+`data.json` that the sigmaexporter Gephi plugin writes, so existing exports keep working.
 
-Phases 1 to 3 of the migration are in: loading, rendering that matches the old viewer, and
-the full interface (left panel, legend, search, group selector, information pane, hash
-links). Next, this folder replaces `../network/`.
+`npm run build` writes the viewer into `../network/` (`index.html`, `assets/`, `images/`).
+That folder is committed, so the template can be used without Node: copy it to a web
+server next to your `config.json` and data. Don't edit `../network/index.html` or
+`../network/assets/` by hand; change the source here and rebuild. The sample configs,
+`data/` and `server/` helper scripts in `../network/` are not touched by the build.
 
 ## Commands
 
@@ -15,7 +17,7 @@ npm install
 npm run dev            # dev server; open /?config=<path to a config.json>
 npm test               # unit tests (config translation, data loading)
 npm run test:browser   # Playwright: renders fixtures and the sample Twitter network
-npm run build          # static site in dist/
+npm run build          # writes the viewer into ../network/
 ```
 
 Set `CHROMIUM_PATH` to use an already installed Chromium for `test:browser`.
@@ -26,7 +28,7 @@ Set `CHROMIUM_PATH` to use an already installed Chromium for `test:browser`.
   nested under `attributes`, so names like `type` or `hidden` never reach sigma.
 - Sizes are rescaled exactly as sigma 0.1 did, using `sigma.graphProperties`.
 - Coordinates are used as Gephi wrote them. sigma 3's y axis points up like Gephi's, so the
-  y flip in `../network/js/sigma/sigma.parseJson.js` is gone (covered by a browser test).
+  y flip in the old viewer's `sigma.parseJson.js` is gone (covered by a browser test).
 - `sigma.mouseProperties` zoom ratios are inverted into sigma 3 camera ratios.
 - Edges may carry an optional `directed: true|false`. With an arrow edge style, arrows are
   drawn only on edges not marked `false`; files without the field behave as before.

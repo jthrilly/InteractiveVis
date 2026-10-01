@@ -1,10 +1,10 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
 
-// `npm run test:browser` builds dist/ first. This mimics the plugin's "embed
-// data in index.html" option and opens the result straight from disk.
-const dist = new URL("../../dist/", import.meta.url);
+// `npm run test:browser` builds ../network first. This mimics the plugin's
+// "embed data in index.html" option and opens the result straight from disk.
+const dist = new URL("../../../network/", import.meta.url);
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf8");
 
 function embed(json: string): string {
@@ -20,12 +20,15 @@ test("an export with embedded data opens from a file:// URL", async ({ page }) =
   );
   const file = new URL("offline-test.html", dist);
   writeFileSync(file, html);
-
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(pathToFileURL(file.pathname).href);
-  await page.waitForFunction(() => (window as any).ivis);
-  expect(await page.evaluate(() => (window as any).ivis.graph.order)).toBe(4);
-  await expect(page).toHaveTitle("Orientation check");
-  expect(errors).toEqual([]);
+  try {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(pathToFileURL(file.pathname).href);
+    await page.waitForFunction(() => (window as any).ivis);
+    expect(await page.evaluate(() => (window as any).ivis.graph.order)).toBe(4);
+    await expect(page).toHaveTitle("Orientation check");
+    expect(errors).toEqual([]);
+  } finally {
+    rmSync(file, { force: true });
+  }
 });
