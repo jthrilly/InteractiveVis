@@ -18,8 +18,9 @@ export interface SearchHit {
  * how `#label` links find their node.
  */
 export function searchNodes(graph: IVGraph, query: string, options: { fulltext: boolean; exact?: boolean }): SearchHit[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return [];
+  // Typed queries are trimmed; an exact (hash) lookup keeps the label as written.
+  const needle = (options.exact ? query : query.trim()).toLowerCase();
+  if (!needle.trim()) return [];
   const hits: SearchHit[] = [];
   graph.forEachNode((key, attrs) => {
     const label = attrs.label.toLowerCase();
