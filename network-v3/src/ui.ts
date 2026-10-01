@@ -331,9 +331,13 @@ export class ViewerUI {
       event.preventDefault();
       if (!this.dialog.open) this.dialog.showModal();
     });
-    // Closing the dialog leaves #information without adding a history entry.
+    // Closing the dialog leaves #information without adding a history entry,
+    // putting back the hash of whatever the pane still shows.
     this.dialog.addEventListener("close", () => {
-      if (readHash() === "information") history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (readHash() !== "information") return;
+      const { selected, group } = this.state;
+      const name = selected ? this.graph.getNodeAttribute(selected, "label") : group;
+      history.replaceState(null, "", name ? hashFor(name) : window.location.pathname + window.location.search);
     });
     // Clicking the backdrop closes the dialog, as fancyBox did.
     this.dialog.addEventListener("click", (event) => {

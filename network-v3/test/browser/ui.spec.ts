@@ -112,6 +112,12 @@ test("Back and Forward close and reopen a node, the dialog and the group list", 
 
   await page.getByRole("link", { name: "More about this visualisation" }).click();
   await expect(page.locator("#information")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/#davidundludwig$/);
+  await expect(pane(page).locator(".name")).toHaveText("davidundludwig");
+
+  await page.getByRole("link", { name: "More about this visualisation" }).click();
+  await expect(page.locator("#information")).toBeVisible();
   expect(await page.evaluate(() => window.location.hash)).toBe("#information");
   await page.goBack();
   await expect(page.locator("#information")).toBeHidden();

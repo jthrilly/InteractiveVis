@@ -38,6 +38,8 @@ describe("searchNodes", () => {
   it("matches whole labels for #links", () => {
     expect(searchNodes(graph, "carol", { fulltext: false, exact: true }).map((h) => h.key)).toEqual(["c"]);
     expect(searchNodes(graph, "car", { fulltext: false, exact: true })).toEqual([]);
+    const { graph: spaced } = buildGraph({ nodes: [{ id: "s", label: " Spaced " }], edges: [] }, config);
+    expect(searchNodes(spaced, " spaced ", { fulltext: false, exact: true }).map((h) => h.key)).toEqual(["s"]);
   });
 });
 
