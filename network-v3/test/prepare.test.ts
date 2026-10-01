@@ -63,6 +63,8 @@ describe("edge programs", () => {
   it("fades edge colours towards the background without touching Gephi columns", () => {
     expect(fadeTowards("rgb(0,0,0)", "#ffffff", 0.5)).toBe("rgb(128,128,128)");
     expect(fadeTowards("#ff0000", "#000000", 0)).toBe("rgb(255,0,0)");
+    expect(fadeTowards("rgba(0,0,0,0)", "#ffffff", 0.5)).toBe("rgb(255,255,255)");
+    expect(fadeTowards("rgba(0,0,0,0.5)", "#ffffff", 0)).toBe("rgb(128,128,128)");
     const graph = graphFor("curve");
     expect(graph.getEdgeAttribute("cd", "color")).not.toBe("rgb(0,200,0)");
     expect(graph.getEdgeAttribute("cd", "attributes")).toEqual({});
@@ -103,5 +105,26 @@ describe("hover reducers", () => {
     expect(nodeReducer!("b", node("b")).hidden).toBeFalsy();
     setHovered(state, graph, null);
     expect(nodeReducer!("c", node("c")).hidden).toBeFalsy();
+  });
+});
+
+describe("hide keeps edges between two neighbours, as sigma 0.1 did", () => {
+  it("hides only edges with an end outside the neighbourhood", () => {
+    const triangle: RawData = {
+      nodes: ["a", "b", "c", "d"].map((id) => ({ id })),
+      edges: [
+        { id: "ab", source: "a", target: "b" },
+        { id: "ac", source: "a", target: "c" },
+        { id: "bc", source: "b", target: "c" },
+        { id: "cd", source: "c", target: "d" },
+      ],
+    };
+    const { graph } = buildGraph(triangle, normalizeConfig({ type: "network" }));
+    const state = createViewState();
+    const { edgeReducer } = makeReducers(graph, state, "hide");
+    setHovered(state, graph, "a");
+    const edge = (key: string) => edgeReducer!(key, { ...graph.getEdgeAttributes(key) } as never);
+    expect(edge("bc").hidden).toBeFalsy();
+    expect(edge("cd").hidden).toBe(true);
   });
 });

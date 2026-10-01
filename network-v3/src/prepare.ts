@@ -20,7 +20,10 @@ export const EDGE_FADE = 0.35;
 export function fadeTowards(color: string, background: string, amount: number): string {
   const c = parseColor(color);
   const bg = parseColor(background);
-  const mix = (a: number, b: number) => Math.round(a + (b - a) * amount);
+  // A translucent colour is composited over the background first, so its own
+  // transparency still shows (a fully transparent edge stays invisible).
+  const weight = (1 - amount) * c.a;
+  const mix = (a: number, b: number) => Math.round(b + (a - b) * weight);
   return `rgb(${mix(c.r, bg.r)},${mix(c.g, bg.g)},${mix(c.b, bg.b)})`;
 }
 

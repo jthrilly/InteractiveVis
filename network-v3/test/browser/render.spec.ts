@@ -85,10 +85,11 @@ test("zoom buttons zoom in, out and reset", async ({ page }) => {
   const ratio = () => page.evaluate(() => (window as any).ivis.renderer.getCamera().ratio as number);
   await page.getByRole("button", { name: "Zoom in" }).click();
   await expect.poll(ratio).toBeCloseTo(1 / 1.5);
+  // Zoom out doubles the ratio, as sigma 0.1's 0.5 zoom factor did.
   await page.getByRole("button", { name: "Zoom out" }).click();
-  await expect.poll(ratio).toBeCloseTo(1);
-  await page.getByRole("button", { name: "Zoom out" }).click();
+  await expect.poll(ratio).toBeCloseTo((1 / 1.5) * 2);
   // The default minRatio of 0.75 stops zooming out at a camera ratio of 1/0.75.
+  await page.getByRole("button", { name: "Zoom out" }).click();
   await expect.poll(ratio).toBeCloseTo(1 / 0.75);
   await page.getByRole("button", { name: "Reset zoom" }).click();
   await expect.poll(ratio).toBeCloseTo(1);
