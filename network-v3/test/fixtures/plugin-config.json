@@ -1,0 +1,19 @@
+{
+  "type": "network",
+  "version": "1.0",
+  "data": "data.json",
+  "logo": { "file": "", "link": "", "text": "" },
+  "text": { "title": "Plugin export", "intro": "", "more": "" },
+  "legend": { "nodeLabel": "", "edgeLabel": "", "colorLabel": "" },
+  "features": { "search": "true", "hoverBehavior": "default", "groupSelectorAttribute": false },
+  "informationPanel": { "groupByEdgeDirection": false, "imageAttribute": false },
+  "sigma": {
+    "drawingProperties": {
+      "defaultLabelColor": "#000", "defaultLabelSize": 14, "defaultLabelBGColor": "#ddd",
+      "defaultHoverLabelBGColor": "#002147", "defaultLabelHoverColor": "#fff", "labelThreshold": 10,
+      "defaultEdgeType": "curve", "hoverFontStyle": "bold", "fontStyle": "bold", "activeFontStyle": "bold"
+    },
+    "mouseProperties": { "minRatio": 0.75, "maxRatio": 20 },
+    "graphProperties": { "minNodeSize": 1, "maxNodeSize": 7, "minEdgeSize": 0.2, "maxEdgeSize": 0.5 }
+  }
+}

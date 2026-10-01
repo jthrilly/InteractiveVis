@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Network visualisation</title>
+  </head>
+  <body>
+    <div id="sigma-canvas"></div>
+
+    <aside id="mainpanel" aria-label="About this network">
+      <button type="button" id="panel-toggle" aria-expanded="true" aria-controls="panel-body">Hide panel</button>
+      <div id="panel-body">
+        <div id="maintitle"></div>
+        <h2 id="title"></h2>
+        <div id="titletext"></div>
+        <p id="moreinformation" class="info" hidden>
+          <a href="#information" id="moreinformation-link">More about this visualisation</a>
+        </p>
+        <section id="legend" hidden>
+          <h2>Legend:</h2>
+          <dl>
+            <dt class="node" hidden></dt>
+            <dd class="node" hidden></dd>
+            <dt class="edge" hidden></dt>
+            <dd class="edge" hidden></dd>
+            <dt class="colours" hidden></dt>
+            <dd class="colours" hidden></dd>
+          </dl>
+        </section>
+        <form id="search" role="search" hidden>
+          <h2><label for="search-input">Search:</label></h2>
+          <div class="search-row">
+            <input type="search" id="search-input" name="search" placeholder="Search by name" autocomplete="off" />
+            <button type="submit" id="search-go" aria-label="Search"></button>
+          </div>
+          <div class="results" id="search-results" aria-live="polite" hidden></div>
+        </form>
+        <section id="attributeselect" hidden>
+          <h2>Group Selector:</h2>
+          <button type="button" class="select" id="group-toggle" aria-expanded="false" aria-controls="group-list">Select Group</button>
+          <ul class="list" id="group-list" hidden></ul>
+        </section>
+      </div>
+    </aside>
+
+    <aside id="attributepane" aria-label="Information pane" hidden>
+      <button type="button" class="returntext" id="pane-close">Return to the full network</button>
+      <h2 class="headertext">Information Pane</h2>
+      <div class="nodeattributes">
+        <div class="name"></div>
+        <dl class="data"></dl>
+        <h3 class="p"></h3>
+        <div class="link"></div>
+      </div>
+    </aside>
+
+    <div id="zoom">
+      <button type="button" data-zoom="in" title="Zoom in" aria-label="Zoom in"></button>
+      <button type="button" data-zoom="out" title="Zoom out" aria-label="Zoom out"></button>
+      <button type="button" data-zoom="reset" title="Reset zoom" aria-label="Reset zoom"></button>
+    </div>
+
+    <div id="developercontainer">
+      <a href="https://www.oii.ox.ac.uk/" title="Oxford Internet Institute" id="oii"><span>OII</span></a>
+      <a href="https://www.jisc.ac.uk/" title="JISC" id="jisc"><span>JISC</span></a>
+    </div>
+    <div id="copyright">
+      <a rel="license" href="https://creativecommons.org/licenses/by-nc-sa/3.0/"
+        ><img alt="Creative Commons License BY-NC-SA" src="./images/CC.png"
+      /></a>
+    </div>
+
+    <dialog id="information" aria-label="More about this visualisation">
+      <form method="dialog"><button type="submit" class="dialog-close" aria-label="Close">×</button></form>
+      <div class="content"></div>
+    </dialog>
+
+    <p id="message" role="alert" hidden></p>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

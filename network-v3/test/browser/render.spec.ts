@@ -1,0 +1,96 @@
+import { readFileSync } from "node:fs";
+import { expect, test, type Page } from "@playwright/test";
+
+const file = (path: string) => readFileSync(new URL(path, import.meta.url));
+
+// Serves fixture and sample files without copying them into the app.
+async function serve(page: Page, routes: Record<string, string>) {
+  for (const [pattern, path] of Object.entries(routes)) {
+    await page.route(pattern, (route) => route.fulfill({ body: file(path), contentType: "application/json" }));
+  }
+}
+
+async function viewport(page: Page, node: string) {
+  return page.evaluate((key) => {
+    const { renderer, graph } = (window as any).ivis;
+    return renderer.graphToViewport(graph.getNodeAttributes(key));
+  }, node);
+}
+
+test("keeps Gephi's orientation: larger y is higher on screen", async ({ page }) => {
+  await serve(page, {
+    "**/fixtures/orientation-config.json": "../fixtures/orientation-config.json",
+    "**/orientation.json": "../fixtures/orientation.json",
+  });
+  await page.goto("/?config=fixtures/orientation-config.json");
+  await page.waitForFunction(() => (window as any).ivis);
+  await expect(page).toHaveTitle("Orientation check");
+
+  const top = await viewport(page, "top");
+  const bottom = await viewport(page, "bottom");
+  const left = await viewport(page, "left");
+  const right = await viewport(page, "right");
+  expect(top.y).toBeLessThan(bottom.y);
+  expect(left.x).toBeLessThan(right.x);
+
+  const types = await page.evaluate(() => {
+    const { renderer } = (window as any).ivis;
+    return { a: renderer.getEdgeDisplayData("a").type, b: renderer.getEdgeDisplayData("b").type };
+  });
+  expect(types).toEqual({ a: "arrow", b: "line" });
+});
+
+test("renders the OII Twitter sample network", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await serve(page, {
+    "**/sample/config.json": "../../../network/config.json",
+    "**/data/twitter_mutual2.json": "../../../network/data/twitter_mutual2.json",
+  });
+  await page.goto("/?config=sample/config.json");
+  await page.waitForFunction(() => (window as any).ivis);
+  expect(await page.evaluate(() => (window as any).ivis.graph.order)).toBe(1064);
+  await expect(page.locator("#message")).toBeHidden();
+  expect(errors).toEqual([]);
+  await page.screenshot({ path: "test-results/twitter.png" });
+});
+
+test("dims nodes outside the hovered node's neighbourhood", async ({ page }) => {
+  await serve(page, {
+    "**/fixtures/hover-config.json": "../fixtures/hover-config.json",
+    "**/orientation.json": "../fixtures/orientation.json",
+  });
+  await page.goto("/?config=fixtures/hover-config.json");
+  await page.waitForFunction(() => (window as any).ivis);
+  const top = await viewport(page, "top");
+  await page.mouse.move(top.x, top.y);
+  await page.waitForFunction(() => (window as any).ivis.state.hovered === "top");
+  const colors = await page.evaluate(() => {
+    const { renderer } = (window as any).ivis;
+    return { right: renderer.getNodeDisplayData("right").color, left: renderer.getNodeDisplayData("left").color };
+  });
+  expect(colors).toEqual({ right: "rgb(200,150,0)", left: "#ccc" });
+  await page.mouse.move(5, 5);
+  await page.waitForFunction(() => (window as any).ivis.state.hovered === null);
+  expect(await page.evaluate(() => (window as any).ivis.renderer.getNodeDisplayData("left").color)).toBe("rgb(0,150,0)");
+});
+
+test("zoom buttons zoom in, out and reset", async ({ page }) => {
+  await serve(page, {
+    "**/fixtures/orientation-config.json": "../fixtures/orientation-config.json",
+    "**/orientation.json": "../fixtures/orientation.json",
+  });
+  await page.goto("/?config=fixtures/orientation-config.json");
+  await page.waitForFunction(() => (window as any).ivis);
+  const ratio = () => page.evaluate(() => (window as any).ivis.renderer.getCamera().ratio as number);
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await expect.poll(ratio).toBeCloseTo(1 / 1.5);
+  // Zoom out doubles the ratio, as sigma 0.1's 0.5 zoom factor did.
+  await page.getByRole("button", { name: "Zoom out" }).click();
+  await expect.poll(ratio).toBeCloseTo((1 / 1.5) * 2);
+  // The default minRatio of 0.75 stops zooming out at a camera ratio of 1/0.75.
+  await page.getByRole("button", { name: "Zoom out" }).click();
+  await expect.poll(ratio).toBeCloseTo(1 / 0.75);
+  await page.getByRole("button", { name: "Reset zoom" }).click();
+  await expect.poll(ratio).toBeCloseTo(1);
+});

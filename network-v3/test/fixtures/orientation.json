@@ -1,0 +1,8 @@
+{"nodes":[
+ {"id":"top","label":"Top","x":0,"y":100,"size":10,"color":"rgb(200,0,0)"},
+ {"id":"bottom","label":"Bottom","x":0,"y":-100,"size":10,"color":"rgb(0,0,200)"},
+ {"id":"left","label":"Left","x":-100,"y":0,"size":10,"color":"rgb(0,150,0)"},
+ {"id":"right","label":"Right","x":100,"y":0,"size":10,"color":"rgb(200,150,0)"}],
+ "edges":[
+ {"id":"a","source":"top","target":"right","size":1,"color":"rgb(0,0,0)"},
+ {"id":"b","source":"left","target":"bottom","size":1,"color":"rgb(0,0,0)","directed":false}]}
