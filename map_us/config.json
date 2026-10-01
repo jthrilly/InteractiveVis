@@ -2,7 +2,7 @@
     "text": {
         "title": "2012 US Election on Twitter",
         "intro": "Geocoded tweets referencing \"Obama,\" \"Romney,\" \"Ryan,\" or \"Biden\".",
-        "more": "<p>The data was obtained from Twitter on between October 1, 2012 and November 1, 2012. Searches were conducted for the words 'Obama', 'Romney', 'Ryan', and 'Biden'. Map by <a href=\"http://www.scotthale.net/\">Scott A. Hale</a> and <a href=\"http://www.zerogeography.net/\">Mark Graham</a>. The visualization was created with tools developed with funding by <a href=\"http://blogs.oii.ox.ac.uk/vis/\">JISC for the InteractiveVis project</a>. Data was collected as part of a <a herf=\"http://www.oii.ox.ac.uk/research/projects/?id=89\">John Fell Fund supported grant</a> investigating the geographies of the Internet. Assistance provided by Adham Tamer and Ning Wang, <a href=\"http://www.oii.ox.ac.uk/\">Oxford Internet Institute</a>.</p>"
+        "more": "<p>The data was obtained from Twitter on between October 1, 2012 and November 1, 2012. Searches were conducted for the words 'Obama', 'Romney', 'Ryan', and 'Biden'. Map by <a href=\"http://www.scotthale.net/\">Scott A. Hale</a> and <a href=\"http://www.zerogeography.net/\">Mark Graham</a>. The visualization was created with tools developed with funding by <a href=\"http://blogs.oii.ox.ac.uk/vis/\">JISC for the InteractiveVis project</a>. Data was collected as part of a <a href=\"http://www.oii.ox.ac.uk/research/projects/?id=89\">John Fell Fund supported grant</a> investigating the geographies of the Internet. Assistance provided by Adham Tamer and Ning Wang, <a href=\"http://www.oii.ox.ac.uk/\">Oxford Internet Institute</a>.</p>"
     },
     "logo": {
         "text": "Oxford Internet Institute",

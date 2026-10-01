@@ -1,651 +1,554 @@
-//library=$(function() {
-"use strict";
-$(document).ready(function() {
+/*
+ * InteractiveVis choropleth map template.
+ *
+ * Plain ES module, no dependencies. The same file is used by map/, map_us/
+ * and usmap/; the only per-template settings live on the #map element in
+ * index.htm:
+ *   data-shapes        name of the global that holds the region paths
+ *                      ({width, height, shapes: {id: "M..."}}), loaded by a
+ *                      classic <script> before this module
+ *   data-initial-view  optional "x y width height" start viewBox (map units)
+ *
+ * config.json and data.json use the original InteractiveVis formats.
+ */
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const DEFAULT_HIGHLIGHT = 'rgba(247, 102, 10, 1)';
+const NO_DATA_FILL = '#ccc';
+const ZOOM_IN = 0.75; // viewBox multiplier per zoom-in step
+const ZOOM_OUT = 1.25;
+const MIN_ZOOM = 0.05; // smallest viewBox width as a share of the map width
 
-//Load
-var config={};
-var data={};//Previusly mapData and countrycodes. These should no longer be used
-jQuery.getJSON("config.json", function(conf, textStatus, jqXHR) {
-	config=conf;
-	
-	if (!config.global || !config.global.type=="map") {
-		//bad config
-		alert("Cannot find configuration settings.");
-		return;
-	}
-	
-	jQuery.getJSON("data.json", function(datajson, textStatus, jqXHR) {
-	data=datajson;
-	
-	var currentStat="";
-	var altStats=[];
-	var barStats=[];
-	var textStats=[];
-	for (var i=0; i<config.features.stats.length; i++) {
-		var stat = config.features.stats[i];
-		var leg = config["features"]["legend_"+stat]
-		if (leg.type=="main_statistic") {
-			currentStat=stat;
-			altStats.push(stat);
-		} else if (leg.type=="alternative_statistic") {
-			altStats.push(stat);
-		}
-				
-		if (leg.style.indexOf("bar")>-1) {
-			barStats.push({"stat":stat,"label":leg.paneltitle,"color":leg.color});
-		}
-		if (leg.style.indexOf("text")>-1) {
-			textStats.push({"stat":stat,"label":leg.paneltitle});
-		}
-	}
-	if (currentStat=="" && altStats.length>0) {
-		currentStat=altStats[0];
-	}
-	
-	//init GUI
-	var logo="";//Default title
-	if (config.logo.file) {
-		/*<a href="http://www.oii.ox.ac.uk"><img src="images/oii_brand.png" alt="Oxford Internet Institute" class="logo" /></a><h1 id="textTitle">&nbsp;</h1>*/
-		logo = "<img src=\"" + config.logo.file +"\"";
-		if (config.logo.text) logo+=" alt=\"" + config.logo.text + "\"";
-		logo+=">";
-	} else if (config.logo.text) {
-		logo="<h1>"+config.logo.text+"</h1>";
-	}
-	if (config.logo.link) logo="<a href=\"" + config.logo.link + "\">"+logo+"</a>";
-	$("#maintitle").html(logo);
-	//#title <h2>Literacy and  Gender</h2>
-	$("#title").html("<h2>"+config.text.title+"</h2>");
-	
+const $ = (sel) => document.querySelector(sel);
 
-	//#titletext
-	$("#titletext").html(config.text.intro);
-	
-	//more information
-	if (config.text.more) {
-		$("#information").html(config.text.more);
-	} else {
-		//hide more information link
-		$("#moreinformation").hide();
-	}
-	
-	updateLegend();
-	
-	//alternative main stats?
-	if (altStats.length>1) {
-		var legendtitle=$('#legendtitle'), statoptions=$('<ul>', {id: 'altStats'});
-		legendtitle.parent('#legend').addClass('hasAltStats');
-		legendtitle.after(statoptions.hide());
-		for (var i=0; i<altStats.length; i++) {
-			//if (currentStat == altStats[i]) continue;
-			var item=$('<li><a href="#"' + altStats[i] + ' data-altstat="'+altStats[i]+'">'+config["features"]["legend_"+altStats[i]].legendtitle+'</a></li>');
-			item.children('a').click(function(evt){
-				evt.preventDefault();
-				$(this).parent().siblings('li').children('a').removeClass('selected');
-				$(this).addClass('selected');
-				changeMainStat($(this).attr('data-altstat'));
-			});
-			statoptions.append(item);
-		}
-		statoptions
-		.on('show', function() {			
-			if(statoptions.is(':animated')) {
-				return false;
-			}
-			legendtitle.addClass('expanded');
-			statoptions.slideDown(300);})
-		.on('hide', function() {
-			if(statoptions.is(':animated')) {
-				return false;
-			}
-			legendtitle.removeClass('expanded');
-			statoptions.slideUp(300);})
-		.on('toggle', function() {
-			if(legendtitle.hasClass('expanded')) statoptions.trigger('hide');
-			else statoptions.trigger('show');
-		});
-		$('#legendtitle').click(function(){
-			statoptions.trigger('toggle');
-			return false;
-		});
-		$(document).click(function(){
-			statoptions.trigger('hide');
-		});	
-	}
-	
-	// map
-	//var canvas=$('#canvas');
-	var svg=$('#svg');
-	var image=usmap;
-	var include=[];
-	var mapstyle={
-		fill: ['#cccccc', '#eeeeee', '#0679a4'],
-		stroke: '#999',
-		'stroke-width': 0.25,
-		'stroke-linejoin': 'round'
-	};
-	
-	var map=Raphael(svg.attr('id'), svg.width(), svg.height());
-	map.setStart();
-	for (var country in image.shapes) {
-		/*if (countrycodes.iso2[country]||$.inArray(country, include)>-1) paint(country);
-		else console.log("NOT printing " + country);
-		Used to skip: XS,XP,XN,XO,XC,XA*/
-		paint(country);
-	}
-	
-	/*for (var state in states.shapes) {
-		var obj=map.path(states.shapes[state]);
-		obj.id=state;
-		obj.attr({
-			stroke: hex2rgb("#888", 'string'),
-			'stroke-width': 0.3,
-			'stroke-linejoin': mapstyle['stroke-join']		
-		});
+/** True when v can be used as a number (rejects "", null, "Not Reported", "#DIV/0!"). */
+const isNum = (v) => v !== null && v !== undefined && v !== '' && !Number.isNaN(Number(v));
+const asArray = (v) => (Array.isArray(v) ? v : v === undefined || v === null ? [] : [v]);
+const hasStyle = (legend, style) => asArray(legend.style).includes(style);
 
-	}*/
-	var obj=map.rect(0, 0, image.width, image.height, 0).attr({stroke: 'none', fill: '#fff', opacity: 0});
-	obj.id='container';
-	obj.toBack();
-	var set=map.setFinish();
-	var viewbox={
-		x: 0,
-		y: 0,
-		width: image.width,
-		height: image.height
-	}
-	map.setViewBox(viewbox.x, viewbox.y, viewbox.width, viewbox.height);
-	
-	// chart
-	if (barStats.length>0) {
-		var elem=$('#chart');
-		//var chartlabels=config.informationPanel.bars.labels;//['Total', 'Male', 'Female'];
-		var chartsuffix=config.features.bars.units;//'%';
-		var chartstyle={};
-		chartstyle.labels={'text-anchor': 'middle', 'font': '12px Helvetica, Arial, sans-serif', fill: '#666'};
-		chartstyle.plots={'colors':[],'text':[]};
-		for (var i=0; i<barStats.length; i++) {
-			chartstyle.plots["colors"].push({fill: barStats[i].color, stroke: 'none', 'stroke-width': 0});
-			chartstyle.plots["text"].push({'text-anchor': 'middle', 'font': '12px Helvetica, Arial, sans-serif', fill: '#fff'});
-		}
-	
-		//var chart=Raphael(elem.attr('id'), elem.parent().width(), elem.parent().height()-(elem.position().top));
-		var chart=Raphael(elem.attr('id'), elem.parent().width(), elem.parent().height());//-$('#chartname').outerHeight()
-		var plot={};
-		plot.x=0;
-		plot.y=0;
-		plot.gutter=Math.round(chart.width*0.1);
-		plot.width=(chart.width-(plot.gutter*(barStats.length-1)))/barStats.length;
-		plot.height=Math.min(chart.height,300);
-	
-		var labels=chart.set();
-		for (var i=0; i<barStats.length; i++) {
-			var label=chart.text(plot.x+((plot.width+plot.gutter)*i)+plot.width/2, plot.y).attr(chartstyle.labels);
-			var words=barStats[i]["label"]
-			if (words) {
-				words=words.split(' ');
-				var tmp='';
-				for (var n=0; n<words.length; n++) {
-					label.attr('text', tmp+' '+words[n]);
-					if (label.getBBox(0).width > plot.width) tmp+='\n'+words[n];
-					else tmp+=' '+words[n];
-				}
-				label.attr('text', tmp.substring(1));
-			} else {		
-				label.attr('text', "");
-			}
-			labels.push(label);
-		}
-		var labely=plot.height-labels.getBBox(0).height;
-		for (var i=0; i<labels.length; i++) {
-			labels[i].attr({y: labely+labels[i].getBBox(0).height/2});
-		}
-		plot.height=plot.height-labels.getBBox(0).height-5;
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'class') node.className = v;
+    else if (k === 'text') node.textContent = v;
+    else if (k === 'style') Object.assign(node.style, v);
+    else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  }
+  node.append(...children);
+  return node;
+}
 
-		var bars=chart.set();
-		for (var i=0; i<barStats.length; i++) {
-			chart.rect(plot.x+((plot.width+plot.gutter)*i), plot.y, plot.width, plot.height).attr({stroke:'none', fill:'#ccc'});
-			var bar=chart.rect(plot.x+((plot.width+plot.gutter)*i), plot.y+plot.height, plot.width, 0).attr(chartstyle.plots.colors[i]);
-			bars.push(bar);
-		}
+function svgEl(tag, attrs = {}) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  return node;
+}
 
-		var values=chart.set();
-		for (var i=0; i<barStats.length; i++) {
-			var value=chart.text(plot.x+((plot.width+plot.gutter)*i)+plot.width/2, 0).attr(chartstyle.plots.text[i]);
-			if (chartsuffix) value.suffix=chartsuffix;
-			value.attr('text', '0'+chartsuffix);
-			values.push(value);
-		}
-		values.attr({y: values.getBBox(0).height/2});
-	}//end if we have bars	
-	// initialize
-	$(window).smartresize(resize);
+function showError(message) {
+  const box = $('#loaderror');
+  box.textContent = message;
+  box.hidden = false;
+}
 
+async function getJSON(url) {
+  const res = await fetch(url, { cache: 'no-cache' });
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  return res.json();
+}
 
-	//buttons
-	$("#reset").click(reset);
-	$("#zoomIn").click(zoomOut);
-	$("#zoomOut").click(zoomIn);
-	$("#attributepane .left-close").click(function(){	
-		$("#attributepane").hide();		
-	});
-	//more info
-	$(".fb").fancybox({
-        minWidth: 400,
-        maxWidth: 800,
-        maxHeight: 600
-    });//        minHeight: 300,
-    
-    if (config.features.onLoad.enabled && config.features.onLoad.datapoint && data[config.features.onLoad.datapoint]) {
-		datachange(data[config.features.onLoad.datapoint].paneltitle,
-			data[config.features.onLoad.datapoint]);		
-    } else {//hide panel on load
-    	$("#attributepane").hide();
+async function start() {
+  const mapEl = $('#map');
+  const image = window[mapEl.dataset.shapes];
+  if (!image || !image.shapes) {
+    showError(`Map shapes "${mapEl.dataset.shapes}" were not loaded.`);
+    return;
+  }
+
+  let config;
+  let data;
+  try {
+    config = await getJSON('config.json');
+    if (!config.global || (config.global.type && config.global.type !== 'map')) {
+      showError('Cannot find map configuration settings in config.json.');
+      return;
     }
-    
-	//datachange('World', mapData['world']);
-	set.drag(move(set), movestart);
-	svg.mousewheel(zoom);    
-	
-	function paint(country) {
-		var obj=map.path(image.shapes[country]);
-		var mainStat=data[country] && !isNaN(data[country][currentStat]);
-		if (!mainStat && country.substr(0,1)=="0") {//If the leading id of the fips is 0 and we can't find a match see if the zero was dropped
-			country=country.substr(1);
-			mainStat=data[country] && !isNaN(data[country][currentStat]);
-		}
+    data = await getJSON(config.global.data || 'data.json');
+  } catch (err) {
+    showError(
+      `Could not load the visualisation data (${err.message}). ` +
+        'These pages must be served by a web server, not opened from disk.'
+    );
+    return;
+  }
 
-		obj.id=country;
-		obj.attr({
-			fill: hex2rgb(mainStat ? scale2hex(data[country][currentStat]) : '#ccc', 'string'),
-			stroke: hex2rgb(mapstyle.stroke, 'string'),
-			'stroke-width': mapstyle['stroke-width'],
-			'stroke-linejoin': mapstyle['stroke-join']		
-		});
-		
-		if (data[country]) {//If no in data, don't provide any interaction
-			obj.mouseover(function(){
-				this.animate({
-					fill: (config.features.countryHighlightColor?config.features.countryHighlightColor:'rgba(247, 102, 10, 1)')
-				}, 300);
-			})
-			.mouseout(function(){
-				this.animate({
-					fill: hex2rgb((data[country] && !isNaN(data[country][currentStat])) ? scale2hex(data[country][currentStat]) : '#ccc', 'string')
-				}, 300);
-			})
-			.mousedown(function() {
-				/*var name;
-				if (countrycodes['iso2'][this.id]) name=countrycodes['iso2'][this.id].hname;
-				else if (countrycodes['user-defined'][this.id]) name=countrycodes['user-defined'][this.id].hname;*/
-				var name = data[this.id].label;
-				datachange(name, data[this.id]);
-			});
-		}
-	}
-	
-	function scale2hex(value) {
-		var legend = config["features"]["legend_"+currentStat];
-		var color="#888888";
-		for (var i=0; i<legend.cutpoints.length;i++) {
-			if (value<legend.cutpoints[i]) {
-				return legend.colors[i];
-			}
-		}
-		return legend.colors[legend.colors.length-1];
-	}
-	
-	/*function scale2rgb(percentage) {
-		var minimum=hex2rgb(mapstyle.fill[1]), maximum=hex2rgb(mapstyle.fill[2]);
-		var scale=percentage/100;
-		var colours=[scale*maximum.r+(1-scale)*minimum.r, scale*maximum.g+(1-scale)*minimum.g, scale*maximum.b+(1-scale)*minimum.b];
-		return 'rgb('+colours+')';
-	}*/
-	
-	function hex2rgb (hex, format) {
-		if (hex.charAt(0)=='#') hex=hex.substr(1);
-		var r, g, b;
-		if (hex.length==6) {
-			r=hex.charAt(0)+''+hex.charAt(1);
-			g=hex.charAt(2)+''+hex.charAt(3);
-			b=hex.charAt(4)+''+hex.charAt(5);
-		} else if (hex.length==3) {
-			r=hex.charAt(0)+''+hex.charAt(0);
-			g=hex.charAt(1)+''+hex.charAt(1);
-			b=hex.charAt(2)+''+hex.charAt(2);
-		}
-		if (format=='string') return 'rgb('+[parseInt(r, 16), parseInt(g, 16), parseInt(b, 16)]+')';
-		return {r: parseInt(r, 16), g: parseInt(g, 16), b: parseInt(b, 16)};
-	}
+  new MapVis(mapEl, image, config, data);
+}
 
-	function zoom(e, delta) {
-		var width, height,factor,x,y;
-		var width=viewbox.width;
-		var height=viewbox.height;
+class MapVis {
+  constructor(mapEl, image, config, data) {
+    this.mapEl = mapEl;
+    this.image = image;
+    this.config = config;
+    this.data = data;
+    this.features = config.features || {};
+    this.regions = new Map(); // shape id -> {path, key}
 
-		var centerX=viewbox.width/2+viewbox.x;
-		var centerY=viewbox.height/2+viewbox.y;
-		
-		var coords;
-		if (e!=null) {
-			e.preventDefault();
-			coords=screen2svgCoords(e.clientX,e.clientY);
-		}
+    this.classifyStats();
+    this.initText();
+    this.updateLegend();
+    this.initAltStats();
+    this.initMap();
+    this.initChart();
+    this.initPanel();
+    this.initZoomControls();
+    this.initDialog();
 
-		if (delta<0) factor=1.25;
-		else factor=0.75;
-				
-		if (((viewbox.width*factor/image.width)>=0.05||(viewbox.height*factor/image.height)>=0.025) && 
-		((viewbox.width*factor/image.width)<=1||(viewbox.height*factor/image.height)<=1)) {
-			viewbox.width*=factor;
-			viewbox.height*=factor;
-			viewbox.x-=(viewbox.width-width)*0.5;
-			viewbox.y-=(viewbox.height-height)*0.5;
-			if (e!=null) {//line up map with mouse cursor
-				var coords2=screen2svgCoords(e.clientX,e.clientY);//updated coords
-				var dx=(coords.x-coords2.x);
-				var dy=(coords.y-coords2.y);
-				viewbox.x=viewbox.x+dx;
-				viewbox.y=viewbox.y+dy;
-			}
-			map.setViewBox(viewbox.x, viewbox.y, viewbox.width, viewbox.height);
-		} else if ((viewbox.width*factor/image.width)>=0.05||(viewbox.height*factor/image.height)>=0.025) {
-			//fully zoomed out, but let's center the image at this point
-			reset(e);
-		}
-		//console.log(viewbox);
-			
-	}
-	
-	/*svg.click(fun);
-	function fun(e){
-		centerX=viewbox.width/2+viewbox.x;
-		centerY=viewbox.height/2+viewbox.y;
-		
-		orginX1=viewbox.x;
-		orginY1=viewbox.y;
+    const onLoad = this.features.onLoad || {};
+    if (onLoad.enabled && onLoad.datapoint && this.data[onLoad.datapoint]) {
+      const d = this.data[onLoad.datapoint];
+      this.showInfo(d.label ?? d.paneltitle ?? onLoad.datapoint, d);
+    } else {
+      $('#attributepane').hidden = true;
+    }
+    requestAnimationFrame(() => this.mapEl.classList.add('ready'));
+  }
 
-		dx=(.75*viewbox.width-viewbox.width)/2;
-		dy=(.75*viewbox.height-viewbox.height)/2;
-		//alert(viewbox.x+","+viewbox.y+","+viewbox.width+","+viewbox.height);
-		
-		coords=screen2svgCoords(e.clientX,e.clientY);
-		
-		f=zoom(null,1);
-		
-		coords2=screen2svgCoords(e.clientX,e.clientY);
-		
-		//alert(coords.x-coords2.x);
-		
-		
-		orginX2=viewbox.x;
-		orginY2=viewbox.y;
-		
-		//alert(orginX1-orginX2-offsetX);
-		
-		//coords2=svg2screenCoords(coords.x,coords.y);	
-		//map.path("M" + coords.x + "," + coords.y + "L" + coords2.x + "," + coords2.y);
-		//x=map.circle(coords.x,coords.y,5);
-		//x.transform("T"+(coords.x-centerX)+","+(coords.y-centerY));
-		
-		dx=(coords.x-coords2.x);
-		dy=(coords.y-coords2.y);
+  legendFor(stat) {
+    return this.features['legend_' + stat];
+  }
 
-		
-		viewbox.x=viewbox.x+dx;
-		viewbox.y=viewbox.y+dy;
-		map.setViewBox(viewbox.x, viewbox.y, viewbox.width, viewbox.height);
-	}*/
-	
-	function zoomIn(e)  {
-		zoom(null,-1);
-	}
-	
-	function zoomOut(e) {
-		zoom(null,1);
-	}
-	
-	function center(e){
-		centerX=viewbox.width/2+viewbox.x;
-		centerY=viewbox.height/2+viewbox.y;
-		
-		coords=screen2svgCoords(e.clientX,e.clientY);
-		
-		//map.path("M" + centerX + "," + centerY + "L" + coords.x + "," + coords.y);
-		//x=map.circle(centerX,centerY,5);
-		//x.transform("T"+(coords.x-centerX)+","+(coords.y-centerY));
-		
-		dx=(coords.x-centerX);
-		dy=(coords.y-centerY);
+  classifyStats() {
+    this.currentStat = '';
+    this.altStats = [];
+    this.barStats = [];
+    this.textStats = [];
+    for (const stat of asArray(this.features.stats)) {
+      const leg = this.legendFor(stat);
+      if (!leg) continue;
+      if (leg.type === 'main_statistic') {
+        this.currentStat = stat;
+        this.altStats.push(stat);
+      } else if (leg.type === 'alternative_statistic') {
+        this.altStats.push(stat);
+      }
+      // "style" may be a string ("bar") or a list (["bar", "text"]).
+      if (hasStyle(leg, 'bar')) this.barStats.push({ stat, label: leg.paneltitle, color: leg.color });
+      if (hasStyle(leg, 'text')) this.textStats.push({ stat, label: leg.paneltitle });
+    }
+    if (!this.currentStat && this.altStats.length) this.currentStat = this.altStats[0];
+  }
 
-		
-		viewbox.x=viewbox.x+dx;
-		viewbox.y=viewbox.y+dy;
-		map.setViewBox(viewbox.x, viewbox.y, viewbox.width, viewbox.height);
-	}
+  /* ---------- left panel: logo, title, intro ---------- */
 
-	
-	function screen2svgCoords(x,y) {
-		var factor=viewbox.width/svg.width();
-		var svgX=(x*factor)+viewbox.x;
-		var svgY=(y*factor)+viewbox.y;
-		return {x:svgX,y:svgY};
-	}
-	
-	function svg2screenCoords(x,y) {
-		var factor=viewbox.width/svg.width();
-		var sX=(x-viewbox.x)/factor;
-		var sY=(y-viewbox.y)/factor;
-		return {x:sX,y:sY};
-	}	
+  initText() {
+    const { logo = {}, text = {} } = this.config;
+    const main = $('#maintitle');
+    main.replaceChildren();
+    let logoNode = null;
+    if (logo.file) {
+      logoNode = el('img', { src: logo.file, alt: logo.text || '', class: 'logo' });
+    } else if (logo.text) {
+      logoNode = el('h1', { text: logo.text });
+    }
+    if (logoNode && logo.link) logoNode = el('a', { href: logo.link }, logoNode);
+    if (logoNode) main.append(logoNode);
 
-	
-	function move (s) {
-		return function (dx, dy) {
-			//(s||this).translate(dx-this.dx, dy-this.dy);
-			var x, y, s;
-			s=viewbox.width/image.width;
-			x=viewbox.x-(dx-this.dx)*s;
-			y=viewbox.y-(dy-this.dy)*s;
-			if ((dx-this.dx<0 && x<(image.width/s)*0.5) || (dx-this.dx>0 && x>-((image.width*s)*0.5))) viewbox.x=x;
-			if ((dy-this.dy<0 && y<(image.height/s)*0.5) || (dy-this.dy>0 && y>-((image.height*s)*0.5))) viewbox.y=y;
-			map.setViewBox(viewbox.x, viewbox.y, viewbox.width, viewbox.height);
-			this.dx=dx;
-			this.dy=dy;
-		}
-	}
-	
-	function zoomMoveTo(x,y,w,h) {
-		viewbox.x=x;
-		viewbox.y=y;
-		viewbox.width=w;
-		viewbox.height=h;
-		map.setViewBox(viewbox.x, viewbox.y, viewbox.width, viewbox.height);
-	}
-	//zoomMoveTo(400,75,70,150);
-	zoomMoveTo(475,115,image.width/4,image.height/4);
-	
-	function movestart () {
-		this.dx=this.dy=0;
-	}
-	
-	function resize(e) {
-		var scale,scalex,scaley;
-		
-		//always scale on width
-		//var limitWidth=false;
-		//if ($(window).width()>=$(window).height()) {
-			scalex=$(window).width()/image.width;
-		//} else {
-			scaley=$(window).height()/image.height;
-		//	limitWidth=true;			
-		//}
-		scale = Math.min(scalex,scaley);
-		scale*=.95; //Reduce scale to  95% of max to avoid scroll bars in some browsers
-		/*canvas.css({
-			'width': image.width*scale+'px',
-			'height': image.height*scale+'px',
-			'margin': '0 auto'
-		});	*/	
-		svg.css({
-			'width': '100%',
-			'height': '100%',
-			'margin': '0 auto'
-		});
-		
-		var vdelta=(svg.height()-image.height*scale)/2;
-		if (vdelta<0) vdelta=0;
-		
-		//TODO: THis isn't working
-		var hdelta=(svg.width()-image.width*scale)/2;
-		if (hdelta<0) hdelta=0;
-		//console.log("hdelta: "+hdelta);
-		//console.log("vdelta: "+vdelta);
+    // title, intro and more are author-supplied HTML.
+    if (text.title) {
+      $('#title').innerHTML = `<h2>${text.title}</h2>`;
+      document.title = $('#title').textContent.trim() || document.title;
+    } else {
+      $('#title').replaceChildren();
+    }
+    $('#titletext').innerHTML = text.intro || '';
+    if (text.more) {
+      $('#informationContent').innerHTML = text.more;
+    } else {
+      $('#moreinformation').hidden = true;
+    }
+  }
 
-		//console.log("Scale:  " + scale);
-		//console.log($(window).width() +","+ $(window).height());
-		//console.log("svg.height: " + svg.height() + "; Delta is: " + delta);
-		//if (!limitWidth) {		
-			//if scale is choosen based on height, use above instead.
-			map.setSize(svg.width(), svg.height());
-			//scale the map to fit and translate to center vertically
-			//console.log("scaling,translating");	
-			set.transform("s" + scale + "," + image.width/2 +  "," + image.height/2  + "t" + hdelta + "," + vdelta);
-		//} else {
-		//	console.log("normal");
-		//	map.setSize(image.width*scale,image.height*scale);
-		//}
-		//console.log("s" + scale + "," + image.width/2 +  "," + image.height/2  + "t" + hdelta + "," + vdelta);
-	}	
-	
-	function reset(e) {
-		if (e!=null) e.preventDefault();
-		//var s=viewbox.width/image.width;
-		//console.log(s);
-		viewbox.x=0;
-		//delta=svg.height()-image.height*scale;
-		viewbox.y=0;//delta/-2
-		//viewbox.width/=s;
-		//viewbox.height/=s;
-		viewbox.width=image.width;
-		viewbox.height=image.height;
-		map.setViewBox(viewbox.x, viewbox.y, viewbox.width, viewbox.height);
-	}
-	
-	function datachange(name, data) {
-		var animate = $("#attributepane").is(":visible"); //only animate if the panel is shown
-		$("#attributepane").show();
+  /* ---------- legend + alternative statistics menu ---------- */
 
-		$('#chartname').text(name);
-		
-		if (barStats.length>0) {
-			var maxvalue=config.features.bars.maxvalue;
-			var scale=plot.height/maxvalue;
-			if (animate) values.attr('opacity', 0);
-			for (var i=0; i<values.length; i++) {
-			//for (var i=0; i<chartlabels.length; i++) {
-				var stat=barStats[i]["stat"];//config.informationPanel.bars.stats[i];
-				var t, ty;
-				if (data && !(isNaN(data[stat]))) {
-					t=new String(data[stat]);
-					t+=(values[i].suffix)?values[i].suffix:'';
-					ty=plot.height-(data[stat]*scale)+10;
-				} else {
-					t='n/a';
-					ty=plot.y+plot.height-20;
-				}
-				values[i].attr('text', t);
-				values[i].attr({y: ty});
-			}
-		
+  updateLegend() {
+    const legend = this.legendFor(this.currentStat);
+    const box = $('#legend');
+    if (!legend) {
+      box.hidden = true;
+      return;
+    }
+    const title = $('#legendtitle');
+    (title.querySelector('.legendtitle-text') || title).textContent = legend.legendtitle || '';
+    const list = $('#legendColors');
+    list.replaceChildren();
+    const labels = asArray(legend.labels);
+    const colors = asArray(legend.colors);
+    labels.forEach((label, i) => {
+      list.append(
+        el(
+          'li',
+          {},
+          el('span', { class: 'colourblock', style: { backgroundColor: colors[i] } }),
+          el('span', { class: 'colourlabel', text: label })
+        )
+      );
+    });
+  }
 
-			for (var i=0; i<bars.length; i++) {
-				var stat=barStats[i]["stat"];//config.informationPanel.bars.stats[i];
-				var h=0;
-				//TODO: Order these based on the config data (config.informationPanel.bars.stats)
-				if (data && !(isNaN(data[stat]))) {
-					h=data[stat]*scale;
-				}
-			
-			
-				//animale only if the pane is visible
-				if( animate ) {
-					bars[i].animate({
-							height: h, 
-							y: plot.height-h}, 
-						500, 
-						'>',
-						function() {
-							values.animate({'opacity': 1}, 500);
-						}
-					);
-				} else {
-					bars[i].attr({
-							height: h, 
-							y: plot.height-h}
-					);
-				}
-			
-			}
-		}//end if bars		
-		//If text is set to display, display any text
-		if (textStats.length>0) {
-			var text ="<ul>";
-			//var labels=config.informationPanel.text.labels;
-			//var stats=config.informationPanel.text.stats;
-			for (var i=0; i<textStats.length; i++) {
-				if (data[textStats[i]["stat"]])
-					text+="<li><span class=\"label\">"+textStats[i]["label"]+"</span>" + data[textStats[i]["stat"]]+"</li>";
-			}
-			$("#attributeText").html(text+"</ul>");
-		}
-		
-	}
-	
-	
-	
-	function changeMainStat(stat) {
-		//console.log("changeMainStat: " + stat);
-		currentStat=stat;
-		updateLegend();
-	
-	
-		for (var country in image.shapes) {
-			var obj = map.getById(country);
-			if (obj) {
-				var exists=data[country] && !isNaN(data[country][stat]);
-				obj.attr({
-					fill: hex2rgb(exists ? scale2hex(data[country][stat]) : '#ccc', 'string'),	
-				});
-			}
-		}
-	}
-	
-	function updateLegend() {
-		//console.log("updateLengend. currentStat is " + currentStat);
-		//Legend
-		var legend = config["features"]["legend_"+currentStat];
-		//console.log(legend.legendtitle);
-		$("#legendtitle").html(legend.legendtitle);
-		if (legend.labels && legend.colors) {
-			//<li><span class="colourblock" style="background-color: #e0e2e2"></span><span class="colourlabel">0 - 50%</span></li>
-			var legendColors="";
-			for(var i=0; i<legend.labels.length; i++) {
-				var color=legend.colors[i];
-				var label=legend.labels[i];
-				legendColors+="<li><span class=\"colourblock\" style=\"background-color: "+color+"\"></span><span class=\"colourlabel\">"+label+"</span>\n";
-			}
-			$("#legendColors").html(legendColors);
-		}
-	}
+  initAltStats() {
+    if (this.altStats.length < 2) return;
+    const legend = $('#legend');
+    const title = $('#legendtitle');
+    legend.classList.add('hasAltStats');
 
-	
-	// initialize
-	$(window).resize();
-	svg.animate({'opacity': 1}, 500);
+    const button = el('button', {
+      type: 'button',
+      class: 'legendtitle-text',
+      'aria-expanded': 'false',
+      'aria-controls': 'altStats',
+    });
+    button.textContent = title.textContent;
+    title.replaceChildren(button);
 
-});//End JSON Data load
-});//End JSON Config load
+    const options = el('ul', { id: 'altStats', hidden: '' });
+    const setOpen = (open) => {
+      options.hidden = !open;
+      button.setAttribute('aria-expanded', String(open));
+      title.classList.toggle('expanded', open);
+    };
+    for (const stat of this.altStats) {
+      const link = el('a', {
+        href: '#',
+        'data-altstat': stat,
+        text: this.legendFor(stat).legendtitle || stat,
+      });
+      if (stat === this.currentStat) link.classList.add('selected');
+      link.addEventListener('click', (evt) => {
+        evt.preventDefault();
+        options.querySelectorAll('a').forEach((a) => a.classList.toggle('selected', a === link));
+        setOpen(false);
+        this.changeMainStat(stat);
+        button.focus();
+      });
+      options.append(el('li', {}, link));
+    }
+    title.after(options);
 
-});
+    button.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      setOpen(options.hidden);
+    });
+    document.addEventListener('click', (evt) => {
+      if (!options.contains(evt.target)) setOpen(false);
+    });
+    document.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Escape' && !options.hidden) {
+        setOpen(false);
+        button.focus();
+      }
+    });
+  }
+
+  changeMainStat(stat) {
+    this.currentStat = stat;
+    this.updateLegend();
+    for (const { path, key } of this.regions.values()) path.setAttribute('fill', this.fillFor(key));
+  }
+
+  /* ---------- the map ---------- */
+
+  scaleColor(value) {
+    const legend = this.legendFor(this.currentStat);
+    const cutpoints = asArray(legend.cutpoints);
+    const colors = asArray(legend.colors);
+    const v = Number(value);
+    for (let i = 0; i < cutpoints.length; i++) {
+      if (v < cutpoints[i]) return colors[i] ?? colors[colors.length - 1];
+    }
+    return colors[colors.length - 1] ?? NO_DATA_FILL;
+  }
+
+  fillFor(key) {
+    const row = key && this.data[key];
+    return row && this.currentStat && isNum(row[this.currentStat])
+      ? this.scaleColor(row[this.currentStat])
+      : NO_DATA_FILL;
+  }
+
+  /** data.json key for a shape id; US FIPS codes may have lost their leading zero. */
+  dataKey(id) {
+    if (Object.hasOwn(this.data, id)) return id;
+    if (id.startsWith('0') && Object.hasOwn(this.data, id.slice(1))) return id.slice(1);
+    return null;
+  }
+
+  initMap() {
+    const { width, height } = this.image;
+    this.full = { x: Number(this.image.x) || 0, y: Number(this.image.y) || 0, width, height };
+    const svg = svgEl('svg', {
+      viewBox: `${this.full.x} ${this.full.y} ${width} ${height}`,
+      preserveAspectRatio: 'xMidYMid meet',
+      role: 'img',
+      'aria-label': document.title,
+    });
+    svg.style.setProperty(
+      '--highlight',
+      this.features.countryHighlightColor || DEFAULT_HIGHLIGHT
+    );
+    const group = svgEl('g', { class: 'regions' });
+    for (const [id, d] of Object.entries(this.image.shapes)) {
+      const key = this.dataKey(id);
+      const path = svgEl('path', { d, id: 'region-' + id, class: 'region', fill: this.fillFor(key) });
+      path.dataset.id = id;
+      if (key) {
+        path.classList.add('has-data');
+        path.dataset.key = key;
+      }
+      this.regions.set(id, { path, key });
+      group.append(path);
+    }
+    svg.append(group);
+    this.mapEl.replaceChildren(svg);
+    this.svg = svg;
+
+    const initial = (this.mapEl.dataset.initialView || '').trim().split(/[\s,]+/).map(Number);
+    this.view =
+      initial.length === 4 && initial.every(Number.isFinite)
+        ? { x: initial[0], y: initial[1], width: initial[2], height: initial[3] }
+        : { ...this.full };
+    this.applyView();
+    this.initPointer();
+  }
+
+  applyView() {
+    const v = this.view;
+    this.svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.width} ${v.height}`);
+  }
+
+  /** Client (screen) coordinates -> map coordinates under the current viewBox. */
+  toMap(clientX, clientY) {
+    const ctm = this.svg.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const p = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
+    return { x: p.x, y: p.y };
+  }
+
+  zoom(factor, clientX, clientY) {
+    const v = this.view;
+    const rect = this.svg.getBoundingClientRect();
+    const anchor =
+      clientX === undefined
+        ? this.toMap(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        : this.toMap(clientX, clientY);
+    const width = v.width * factor;
+    if (width > this.full.width) {
+      this.reset(); // fully zoomed out: recentre
+      return;
+    }
+    if (width / this.full.width < MIN_ZOOM) return;
+    v.x = anchor.x - (anchor.x - v.x) * factor;
+    v.y = anchor.y - (anchor.y - v.y) * factor;
+    v.width = width;
+    v.height *= factor;
+    this.applyView();
+  }
+
+  pan(dxClient, dyClient) {
+    const ctm = this.svg.getScreenCTM();
+    if (!ctm) return;
+    const v = this.view;
+    const f = this.full;
+    v.x = Math.min(Math.max(v.x - dxClient / ctm.a, f.x - v.width / 2), f.x + f.width - v.width / 2);
+    v.y = Math.min(Math.max(v.y - dyClient / ctm.d, f.y - v.height / 2), f.y + f.height - v.height / 2);
+    this.applyView();
+  }
+
+  reset() {
+    this.view = { ...this.full };
+    this.applyView();
+  }
+
+  initPointer() {
+    const svg = this.svg;
+    const tooltip = $('#tooltip');
+    const pointers = new Map(); // pointerId -> {x, y}
+    let moved = 0;
+    let pinchDist = 0;
+
+    const hideTooltip = () => {
+      tooltip.hidden = true;
+    };
+
+    svg.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      moved = 0;
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+      }
+    });
+
+    svg.addEventListener('pointermove', (e) => {
+      const prev = pointers.get(e.pointerId);
+      if (prev) {
+        const dx = e.clientX - prev.x;
+        const dy = e.clientY - prev.y;
+        moved += Math.abs(dx) + Math.abs(dy);
+        if (moved > 4 && !svg.hasPointerCapture(e.pointerId)) {
+          svg.setPointerCapture(e.pointerId);
+          svg.classList.add('dragging');
+          hideTooltip();
+        }
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 1 && moved > 4) {
+          this.pan(dx, dy);
+        } else if (pointers.size === 2) {
+          const [a, b] = [...pointers.values()];
+          const dist = Math.hypot(a.x - b.x, a.y - b.y);
+          if (pinchDist > 0 && dist > 0) this.zoom(pinchDist / dist, (a.x + b.x) / 2, (a.y + b.y) / 2);
+          pinchDist = dist;
+        }
+        return;
+      }
+      // Hover tooltip (mouse/pen only)
+      const path = e.target.closest?.('.region.has-data');
+      if (!path || e.pointerType === 'touch') {
+        hideTooltip();
+        return;
+      }
+      tooltip.textContent = this.data[path.dataset.key].label ?? path.dataset.key;
+      tooltip.hidden = false;
+      const pad = 14;
+      const { innerWidth: w, innerHeight: h } = window;
+      const tw = tooltip.offsetWidth;
+      const th = tooltip.offsetHeight;
+      tooltip.style.left = Math.min(e.clientX + pad, w - tw - 4) + 'px';
+      tooltip.style.top = Math.min(e.clientY + pad, h - th - 4) + 'px';
+    });
+
+    const end = (e) => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinchDist = 0;
+      if (!pointers.size) svg.classList.remove('dragging');
+    };
+    svg.addEventListener('pointerup', end);
+    svg.addEventListener('pointercancel', end);
+    svg.addEventListener('pointerleave', hideTooltip);
+
+    svg.addEventListener('click', (e) => {
+      if (moved > 4) return; // that was a drag, not a click
+      const path = e.target.closest?.('.region.has-data');
+      if (!path) return;
+      const row = this.data[path.dataset.key];
+      this.showInfo(row.label ?? path.dataset.key, row);
+    });
+
+    svg.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        if (e.deltaY) this.zoom(e.deltaY > 0 ? ZOOM_OUT : ZOOM_IN, e.clientX, e.clientY);
+      },
+      { passive: false }
+    );
+  }
+
+  initZoomControls() {
+    $('#zoomIn').addEventListener('click', () => this.zoom(ZOOM_IN));
+    $('#zoomOut').addEventListener('click', () => this.zoom(ZOOM_OUT));
+    $('#reset').addEventListener('click', () => this.reset());
+  }
+
+  /* ---------- information pane ---------- */
+
+  initPanel() {
+    $('#attributepane .left-close').addEventListener('click', () => {
+      $('#attributepane').hidden = true;
+    });
+  }
+
+  initChart() {
+    const chart = $('#chart');
+    chart.replaceChildren();
+    this.bars = [];
+    if (!this.barStats.length) {
+      chart.hidden = true;
+      return;
+    }
+    const bars = this.features.bars || {};
+    this.chartUnits = bars.units ?? '';
+    this.chartMax = Number(bars.maxvalue) || 100;
+    for (const { label, color } of this.barStats) {
+      const fill = el('div', { class: 'bar-fill', style: { backgroundColor: color } });
+      const value = el('span', { class: 'bar-value', text: '0' + this.chartUnits });
+      const track = el('div', { class: 'bar-track' }, fill, value);
+      chart.append(el('div', { class: 'bar' }, track, el('div', { class: 'bar-label', text: label ?? '' })));
+      this.bars.push({ fill, value });
+    }
+  }
+
+  showInfo(name, row) {
+    const pane = $('#attributepane');
+    const animate = !pane.hidden; // only animate when the pane is already shown
+    pane.hidden = false;
+    pane.classList.toggle('animate', animate);
+    $('#chartname').textContent = name;
+
+    this.barStats.forEach(({ stat }, i) => {
+      const { fill, value } = this.bars[i];
+      const ok = row && isNum(row[stat]);
+      const pct = ok ? Math.min(Math.max((Number(row[stat]) / this.chartMax) * 100, 0), 100) : 0;
+      fill.style.height = pct + '%';
+      value.textContent = ok ? String(row[stat]) + this.chartUnits : 'n/a';
+      value.classList.toggle('na', !ok);
+      value.classList.toggle('outside', ok && pct < 12); // too short to hold its label
+      value.style.setProperty('--pct', pct + '%');
+      if (animate) {
+        value.classList.remove('shown');
+        setTimeout(() => value.classList.add('shown'), 500);
+      } else {
+        value.classList.add('shown');
+      }
+    });
+
+    const text = $('#attributeText');
+    text.replaceChildren();
+    if (this.textStats.length) {
+      const list = el('ul');
+      for (const { stat, label } of this.textStats) {
+        const v = row && row[stat];
+        if (v === undefined || v === null || v === '') continue;
+        list.append(el('li', {}, el('span', { class: 'label', text: label ?? stat }), String(v)));
+      }
+      text.append(list);
+    }
+    const rightPanelText = this.config.global && this.config.global.rightPanelText;
+    if (rightPanelText) {
+      const p = el('p');
+      p.innerHTML = rightPanelText; // author HTML from config
+      text.append(p);
+    }
+  }
+
+  /* ---------- "more information" dialog ---------- */
+
+  initDialog() {
+    const dialog = $('#information');
+    $('#moreinformation a').addEventListener('click', (evt) => {
+      evt.preventDefault();
+      dialog.showModal();
+    });
+    // Close when the backdrop (outside the dialog box) is clicked.
+    dialog.addEventListener('click', (evt) => {
+      if (evt.target !== dialog) return;
+      const r = dialog.getBoundingClientRect();
+      const inside =
+        evt.clientX >= r.left && evt.clientX <= r.right && evt.clientY >= r.top && evt.clientY <= r.bottom;
+      if (!inside) dialog.close();
+    });
+  }
+}
+
+start();
