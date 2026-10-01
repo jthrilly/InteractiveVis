@@ -16,11 +16,20 @@ export function sortByLabel(graph: IVGraph, keys: Iterable<string>): string[] {
 
 /**
  * Splits neighbours by edge direction, as `informationPanel.groupByEdgeDirection`
- * asks: a node linked both ways is mutual and appears only there.
+ * asks: a node linked both ways is mutual and appears only there. An edge marked
+ * `directed: false` links both ways, so its other end is mutual too.
  */
 export function neighborsByDirection(graph: IVGraph, node: string): NeighborLists {
-  const incoming = new Set(graph.inNeighbors(node));
-  const outgoing = new Set(graph.outNeighbors(node));
+  const incoming = new Set<string>();
+  const outgoing = new Set<string>();
+  graph.forEachInEdge(node, (_edge, attributes, source) => {
+    incoming.add(source);
+    if (attributes.directed === false) outgoing.add(source);
+  });
+  graph.forEachOutEdge(node, (_edge, attributes, _source, target) => {
+    outgoing.add(target);
+    if (attributes.directed === false) incoming.add(target);
+  });
   incoming.delete(node);
   outgoing.delete(node);
   const mutual = [...incoming].filter((key) => outgoing.has(key));
