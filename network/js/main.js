@@ -164,7 +164,7 @@ function setupGUI(config) {
 		$(".edge").hide();
 	}
 	// Colours
-	if (config.legend.nodeLabel) {
+	if (config.legend.colorLabel) {
 		$(".colours").next().html(config.legend.colorLabel);
 	} else {
 		//hide more information link
