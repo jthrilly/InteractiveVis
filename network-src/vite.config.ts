@@ -1,3 +1,5 @@
+import { rmSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vitest/config";
 
 /**
@@ -21,14 +23,29 @@ function classicScript(): Plugin {
   };
 }
 
+/** The build writes into ../network, which also holds the sample configs and data. */
+const OUT_DIR = fileURLToPath(new URL("../network/", import.meta.url));
+
+/**
+ * ../network keeps files the build doesn't make (config*.json, data/,
+ * server/), so only the previous build's hashed bundle is cleared.
+ */
+function clearOldBundle(): Plugin {
+  return {
+    name: "ivis-clear-old-bundle",
+    apply: "build",
+    buildStart: () => rmSync(new URL("../network/assets", import.meta.url), { recursive: true, force: true }),
+  };
+}
+
 // Relative base so the built folder works from any path on a web server,
-// the same way the exported network/ folder does today.
+// the same way the exported network/ folder always has.
 export default defineConfig({
   base: "./",
-  plugins: [classicScript()],
+  plugins: [classicScript(), clearOldBundle()],
   build: {
-    outDir: "dist",
-    emptyOutDir: true,
+    outDir: OUT_DIR,
+    emptyOutDir: false,
     modulePreload: false,
     rollupOptions: { output: { format: "iife" } },
   },
