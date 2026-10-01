@@ -5,13 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Network visualisation</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #fff; font-family: system-ui, sans-serif; }
+      html, body { margin: 0; height: 100%; background: #eee; font-family: Arial, Helvetica, sans-serif; }
       #sigma-canvas { position: absolute; inset: 0; }
       #message { position: absolute; top: 16px; left: 16px; right: 16px; padding: 12px 16px; background: #fde8e8; color: #7a1010; border-radius: 6px; }
+      #zoom { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; }
+      #zoom button { width: 62px; height: 62px; border: 1px solid #ddd; background: rgba(255, 255, 255, 0.8) center / 40px no-repeat; cursor: pointer; }
+      #zoom button:hover { background-color: #fff; }
+      #zoom button[data-zoom="in"] { background-image: url("./images/zoom_in.png"); }
+      #zoom button[data-zoom="out"] { background-image: url("./images/zoom_out.png"); }
+      #zoom button[data-zoom="reset"] { background-image: url("./images/zoom_reset.png"); }
     </style>
   </head>
   <body>
     <div id="sigma-canvas"></div>
+    <div id="zoom">
+      <button type="button" data-zoom="in" title="Zoom in" aria-label="Zoom in"></button>
+      <button type="button" data-zoom="out" title="Zoom out" aria-label="Zoom out"></button>
+      <button type="button" data-zoom="reset" title="Reset zoom" aria-label="Reset zoom"></button>
+    </div>
     <p id="message" role="alert" hidden></p>
     <script type="module" src="./src/main.ts"></script>
   </body>

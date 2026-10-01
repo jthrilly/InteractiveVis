@@ -58,6 +58,10 @@ export interface EdgeAttributes {
   /** true/false when the export says so, undefined when it doesn't. */
   directed?: boolean;
   attributes: Record<string, AttributeValue>;
+  /** sigma edge program, set by prepare.prepareEdges. */
+  type?: string;
+  /** Curve bend, set by prepare.prepareEdges. */
+  curvature?: number;
 }
 
 export type IVGraph = MultiDirectedGraph<NodeAttributes, EdgeAttributes>;

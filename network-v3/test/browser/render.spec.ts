@@ -54,3 +54,42 @@ test("renders the OII Twitter sample network", async ({ page }) => {
   expect(errors).toEqual([]);
   await page.screenshot({ path: "test-results/twitter.png" });
 });
+
+test("dims nodes outside the hovered node's neighbourhood", async ({ page }) => {
+  await serve(page, {
+    "**/fixtures/hover-config.json": "../fixtures/hover-config.json",
+    "**/orientation.json": "../fixtures/orientation.json",
+  });
+  await page.goto("/?config=fixtures/hover-config.json");
+  await page.waitForFunction(() => (window as any).ivis);
+  const top = await viewport(page, "top");
+  await page.mouse.move(top.x, top.y);
+  await page.waitForFunction(() => (window as any).ivis.state.hovered === "top");
+  const colors = await page.evaluate(() => {
+    const { renderer } = (window as any).ivis;
+    return { right: renderer.getNodeDisplayData("right").color, left: renderer.getNodeDisplayData("left").color };
+  });
+  expect(colors).toEqual({ right: "rgb(200,150,0)", left: "#ccc" });
+  await page.mouse.move(5, 5);
+  await page.waitForFunction(() => (window as any).ivis.state.hovered === null);
+  expect(await page.evaluate(() => (window as any).ivis.renderer.getNodeDisplayData("left").color)).toBe("rgb(0,150,0)");
+});
+
+test("zoom buttons zoom in, out and reset", async ({ page }) => {
+  await serve(page, {
+    "**/fixtures/orientation-config.json": "../fixtures/orientation-config.json",
+    "**/orientation.json": "../fixtures/orientation.json",
+  });
+  await page.goto("/?config=fixtures/orientation-config.json");
+  await page.waitForFunction(() => (window as any).ivis);
+  const ratio = () => page.evaluate(() => (window as any).ivis.renderer.getCamera().ratio as number);
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await expect.poll(ratio).toBeCloseTo(1 / 1.5);
+  await page.getByRole("button", { name: "Zoom out" }).click();
+  await expect.poll(ratio).toBeCloseTo(1);
+  await page.getByRole("button", { name: "Zoom out" }).click();
+  // The default minRatio of 0.75 stops zooming out at a camera ratio of 1/0.75.
+  await expect.poll(ratio).toBeCloseTo(1 / 0.75);
+  await page.getByRole("button", { name: "Reset zoom" }).click();
+  await expect.poll(ratio).toBeCloseTo(1);
+});
