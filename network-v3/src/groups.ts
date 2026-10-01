@@ -41,7 +41,8 @@ export function listGroups(graph: IVGraph, groupBy: string): Group[] {
     .sort((a, b) => collator.compare(a.name, b.name));
 }
 
+/** Case-insensitive; a name as written wins over its trimmed form (typed searches). */
 export function findGroup(groups: Group[], name: string): Group | undefined {
-  const wanted = name.trim().toLowerCase();
-  return groups.find((group) => group.name.toLowerCase() === wanted);
+  const match = (wanted: string) => groups.find((group) => group.name.toLowerCase() === wanted);
+  return match(name.toLowerCase()) ?? match(name.trim().toLowerCase());
 }

@@ -127,6 +127,9 @@ test("Back and Forward close and reopen a node, the dialog and the group list", 
   await expect(page.locator("#group-list")).toBeVisible();
   await page.goBack();
   await expect(page.locator("#group-list")).toBeHidden();
+  // Closing the dialog left no duplicate entry, so one more Back closes the node.
+  await page.goBack();
+  await expect(pane(page)).toBeHidden();
 });
 
 test("a label containing a percent sequence survives the round trip through the hash", async ({ page }) => {
