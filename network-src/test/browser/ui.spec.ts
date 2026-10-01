@@ -46,6 +46,9 @@ test("search lists matches, opens the first, and handles regex characters", asyn
   await expect(pane(page).locator(".name")).toHaveText("davidundludwig");
   await expect(pane(page).locator(".data")).toContainText("Humboldt University");
   await expect(page).toHaveURL(/#davidundludwig$/);
+  // The live search queued by typing must not reopen the result list afterwards.
+  await page.waitForTimeout(300);
+  await expect(page.locator("#search-results")).toBeHidden();
   await input.fill("(((");
   await input.press("Enter");
   await expect(page.locator("#search-results")).toContainText("No results found.");
@@ -132,6 +135,15 @@ test("a label containing a percent sequence survives the round trip through the 
   expect(hash).toBe("Rate%20Limit");
 });
 
+test("a hash in another case opens the node without adding a history entry", async ({ page }) => {
+  await openSample(page);
+  await page.evaluate(() => (window.location.hash = "DAVIDUNDLUDWIG"));
+  await expect(pane(page).locator(".name")).toHaveText("davidundludwig");
+  await expect(page).toHaveURL(/#davidundludwig$/);
+  await page.goBack();
+  await expect(pane(page)).toBeHidden();
+});
+
 test("a #label in the first URL opens that node on load", async ({ page }) => {
   await openSample(page, "#davidundludwig");
   await expect(pane(page).locator(".name")).toHaveText("davidundludwig");
@@ -162,4 +174,10 @@ test("on a phone the panel starts folded and can be opened", async ({ page }) =>
   await expect(page.locator("#title")).toBeHidden();
   await page.getByRole("button", { name: "Show panel" }).click();
   await expect(page.locator("#title")).toBeVisible();
+});
+
+test("a #Groups link opens the group list on a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openSample(page, "#Groups");
+  await expect(page.locator("#group-list")).toBeVisible();
 });

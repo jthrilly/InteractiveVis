@@ -65,6 +65,18 @@ describe("neighbour lists", () => {
     expect(neighborsByDirection(graph, "a")).toEqual({ mutual: ["b"], incoming: ["d"], outgoing: ["c"] });
   });
 
+  it("counts the other end of an undirected edge as mutual", () => {
+    const { graph: g } = buildGraph(
+      {
+        nodes: [{ id: "x", label: "X" }, { id: "y", label: "Y" }, { id: "z", label: "Z" }],
+        edges: [{ source: "x", target: "y", directed: false }, { source: "z", target: "x" }],
+      },
+      config,
+    );
+    expect(neighborsByDirection(g, "x")).toEqual({ mutual: ["y"], incoming: ["z"], outgoing: [] });
+    expect(neighborsByDirection(g, "y")).toEqual({ mutual: ["x"], incoming: [], outgoing: [] });
+  });
+
   it("lists every neighbour once, sorted by label", () => {
     expect(allNeighbors(graph, "a")).toEqual(["b", "c", "d"]);
   });

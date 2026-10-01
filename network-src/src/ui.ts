@@ -55,6 +55,9 @@ export class ViewerUI {
   private readonly searchInput = $<HTMLInputElement>("#search-input");
   private readonly groupList = $("#group-list");
   private readonly groupToggle = $<HTMLButtonElement>("#group-toggle");
+  private searchTimer: number | undefined;
+  /** True while route() applies a hash that is already in the address bar. */
+  private routing = false;
 
   constructor(
     private readonly config: ViewerConfig,
@@ -125,12 +128,13 @@ export class ViewerUI {
     const form = $<HTMLFormElement>("#search");
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      // A pending live search would reopen the result list after this one.
+      window.clearTimeout(this.searchTimer);
       this.runSearch(this.searchInput.value, true);
     });
-    let timer: number | undefined;
     this.searchInput.addEventListener("input", () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => this.runSearch(this.searchInput.value, false), 150);
+      window.clearTimeout(this.searchTimer);
+      this.searchTimer = window.setTimeout(() => this.runSearch(this.searchInput.value, false), 150);
     });
   }
 
@@ -355,7 +359,11 @@ export class ViewerUI {
   // ---- #hash links -------------------------------------------------------
 
   private setHash(name: string): void {
-    if (readHash() !== name) history.pushState(null, "", hashFor(name));
+    if (readHash() === name) return;
+    // While routing, the hash differs only in case from the name it matched, so
+    // correct it in place rather than adding a second history entry.
+    if (this.routing) history.replaceState(null, "", hashFor(name));
+    else history.pushState(null, "", hashFor(name));
   }
 
   /**
@@ -364,6 +372,15 @@ export class ViewerUI {
    * that name. An empty hash (back to the start) closes the pane.
    */
   route(hash: string): void {
+    this.routing = true;
+    try {
+      this.applyHash(hash);
+    } finally {
+      this.routing = false;
+    }
+  }
+
+  private applyHash(hash: string): void {
     // The dialog and group list only stay open while their own hash is current.
     if (hash !== "information" && this.dialog.open) this.dialog.close();
     if (hash !== "Groups" && this.groupListOpen) this.showGroupList(false);
@@ -377,7 +394,10 @@ export class ViewerUI {
       return;
     }
     if (hash === "Groups") {
-      if (this.groups.length) this.showGroupList(true);
+      if (!this.groups.length) return;
+      // On a phone the list lives inside the folded panel, so unfold it.
+      if ($("#mainpanel").classList.contains("collapsed")) $<HTMLButtonElement>("#panel-toggle").click();
+      this.showGroupList(true);
       return;
     }
     const hits = searchNodes(this.graph, hash, { fulltext: false, exact: true });
