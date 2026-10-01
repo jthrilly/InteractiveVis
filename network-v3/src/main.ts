@@ -1,12 +1,13 @@
 // Entry point: loads the network, renders it with the old viewer's look and
-// wires up hover behaviour and the zoom buttons. The panels, search and
-// groups arrive in phase 3.
+// builds the panels, search, group selector and information pane around it.
 
 import Sigma from "sigma";
+import "./style.css";
 import { loadNetwork } from "./load";
 import { prepareEdges } from "./prepare";
 import { sigmaSettings } from "./render";
 import { createViewState, makeReducers, setHovered } from "./view";
+import { ViewerUI } from "./ui";
 import { bindZoomButtons } from "./zoom";
 
 function showError(message: string): void {
@@ -50,9 +51,11 @@ async function start(): Promise<void> {
     });
   }
   bindZoomButtons(renderer);
+  const ui = new ViewerUI(config, graph, renderer, state);
+  ui.init();
 
   // Exposed for the browser tests and for debugging from the console.
-  Object.assign(window, { ivis: { config, graph, renderer, state } });
+  Object.assign(window, { ivis: { config, graph, renderer, state, ui } });
 }
 
 start().catch((error: unknown) => {
