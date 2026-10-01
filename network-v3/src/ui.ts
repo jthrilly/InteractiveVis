@@ -33,9 +33,9 @@ function valueNode(value: AttributeValue): Node {
   return document.createTextNode(text);
 }
 
-/** Hash text for a node or group name; the browser percent-encodes it. */
+/** Hash text for a node or group name, encoded so readHash gives it back unchanged. */
 function hashFor(name: string): string {
-  return `#${name}`;
+  return `#${encodeURIComponent(name)}`;
 }
 
 function readHash(): string {
@@ -82,8 +82,9 @@ export class ViewerUI {
     const { logo, text, legend } = this.config;
     const title = $("#maintitle");
     let logoNode: HTMLElement | null = null;
-    if (logo.file) logoNode = el("img", { src: logo.file, alt: logo.text });
-    else if (logo.text) logoNode = el("h1", { textContent: logo.text });
+    // logo.text is author-written HTML, like the other text fields.
+    if (logo.text) logoNode = el("h1", { innerHTML: logo.text });
+    if (logo.file) logoNode = el("img", { src: logo.file, alt: logoNode?.textContent ?? "" });
     if (logoNode && logo.link) logoNode = el("a", { href: logo.link }, [logoNode]);
     if (logoNode) title.append(logoNode);
 
@@ -232,12 +233,12 @@ export class ViewerUI {
   }
 
   /** Back to the full network, as the pane's close link and Esc do. */
-  close(): void {
+  close(writeHistory = true): void {
     if (!this.state.focus) return;
     clearSelection(this.state);
     this.showPane(false);
     this.refresh();
-    if (window.location.hash) history.pushState(null, "", window.location.pathname + window.location.search);
+    if (writeHistory && window.location.hash) history.pushState(null, "", window.location.pathname + window.location.search);
   }
 
   /** Shows or hides the information pane; on a phone it replaces the folded-up panel. */
@@ -319,9 +320,16 @@ export class ViewerUI {
 
   private bindPane(): void {
     $("#pane-close").addEventListener("click", () => this.close());
+    // The link navigates to #information, which opens the dialog through route().
+    // When the hash is already #information, hashchange won't fire, so open it here.
     $("#moreinformation-link").addEventListener("click", (event) => {
+      if (readHash() !== "information") return;
       event.preventDefault();
-      this.dialog.showModal();
+      if (!this.dialog.open) this.dialog.showModal();
+    });
+    // Closing the dialog leaves #information without adding a history entry.
+    this.dialog.addEventListener("close", () => {
+      if (readHash() === "information") history.replaceState(null, "", window.location.pathname + window.location.search);
     });
     // Clicking the backdrop closes the dialog, as fancyBox did.
     this.dialog.addEventListener("click", (event) => {
@@ -356,8 +364,12 @@ export class ViewerUI {
    * that name. An empty hash (back to the start) closes the pane.
    */
   route(hash: string): void {
+    // The dialog and group list only stay open while their own hash is current.
+    if (hash !== "information" && this.dialog.open) this.dialog.close();
+    if (hash !== "Groups" && this.groupListOpen) this.showGroupList(false);
     if (!hash) {
-      this.close();
+      // Back or Forward got here, so don't write history (that would drop Forward entries).
+      this.close(false);
       return;
     }
     if (hash === "information") {

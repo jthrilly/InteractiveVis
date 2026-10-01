@@ -95,6 +95,43 @@ test("#label links open a node, and Back returns to the full network", async ({ 
   await expect(pane(page)).toBeHidden();
 });
 
+test("Back and Forward close and reopen a node, the dialog and the group list", async ({ page }) => {
+  await openSample(page);
+  await page.evaluate(() => {
+    const { graph, ui } = (window as any).ivis;
+    ui.openNode(graph.findNode((_: string, a: any) => a.label === "davidundludwig"));
+  });
+  await expect(pane(page).locator(".name")).toHaveText("davidundludwig");
+  await page.goBack();
+  await expect(pane(page)).toBeHidden();
+  await page.goForward();
+  await expect(pane(page).locator(".name")).toHaveText("davidundludwig");
+
+  await page.getByRole("link", { name: "More about this visualisation" }).click();
+  await expect(page.locator("#information")).toBeVisible();
+  expect(await page.evaluate(() => window.location.hash)).toBe("#information");
+  await page.goBack();
+  await expect(page.locator("#information")).toBeHidden();
+  await expect(pane(page).locator(".name")).toHaveText("davidundludwig");
+
+  await page.evaluate(() => (window.location.hash = "Groups"));
+  await expect(page.locator("#group-list")).toBeVisible();
+  await page.goBack();
+  await expect(page.locator("#group-list")).toBeHidden();
+});
+
+test("a label containing a percent sequence survives the round trip through the hash", async ({ page }) => {
+  await openSample(page);
+  const hash = await page.evaluate(() => {
+    const { graph, ui } = (window as any).ivis;
+    const key = graph.findNode((_: string, a: any) => a.label === "davidundludwig");
+    graph.setNodeAttribute(key, "label", "Rate%20Limit");
+    ui.openNode(key);
+    return decodeURIComponent(window.location.hash.slice(1));
+  });
+  expect(hash).toBe("Rate%20Limit");
+});
+
 test("a #label in the first URL opens that node on load", async ({ page }) => {
   await openSample(page, "#davidundludwig");
   await expect(pane(page).locator(".name")).toHaveText("davidundludwig");
@@ -102,13 +139,17 @@ test("a #label in the first URL opens that node on load", async ({ page }) => {
 
 test("hides the more-information link, legend and selectors when config leaves them out", async ({ page }) => {
   await page.route("**/fixtures/plugin-config.json", (route) =>
-    route.fulfill({ body: JSON.stringify({ type: "network", data: "orientation.json", features: { search: false } }), contentType: "application/json" }),
+    route.fulfill({
+      body: JSON.stringify({ type: "network", data: "orientation.json", features: { search: false }, logo: { text: "<em>Logo</em> text" } }),
+      contentType: "application/json",
+    }),
   );
   await page.route("**/orientation.json", (route) =>
     route.fulfill({ body: file("../fixtures/orientation.json"), contentType: "application/json" }),
   );
   await page.goto("/?config=fixtures/plugin-config.json");
   await page.waitForFunction(() => (window as any).ivis);
+  await expect(page.locator("#maintitle h1 em")).toHaveText("Logo");
   await expect(page.locator("#moreinformation")).toBeHidden();
   await expect(page.locator("#legend")).toBeHidden();
   await expect(page.locator("#search")).toBeHidden();
