@@ -76,8 +76,15 @@ export function makeReducers(graph: IVGraph, state: ViewState, hoverBehavior: Ho
       if (state.focus && !(state.focus.has(graph.source(edge)) && state.focus.has(graph.target(edge)))) {
         return { ...data, hidden: true };
       }
-      if (hoverApplies() && !graph.hasExtremity(edge, state.hovered)) {
-        return hoverBehavior === "hide" ? { ...data, hidden: true } : { ...data, color: DIM_COLOR, zIndex: -1 };
+      if (hoverApplies()) {
+        // sigma 0.1's hide only hid nodes, so edges between two neighbours stayed;
+        // its dim greyed every edge not touching the hovered node.
+        if (hoverBehavior === "hide") {
+          const near = state.hoveredNeighborhood;
+          if (!near.has(graph.source(edge)) || !near.has(graph.target(edge))) return { ...data, hidden: true };
+        } else if (!graph.hasExtremity(edge, state.hovered)) {
+          return { ...data, color: DIM_COLOR, zIndex: -1 };
+        }
       }
       return data;
     },
