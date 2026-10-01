@@ -4,3 +4,7 @@
 
 # Ignore files ending with ~ (these are backups from my text editor)
 *~
+templates-test/node_modules/
+templates-test/test-results/
+templates-test/playwright-report/
+templates-test/screenshots/

@@ -1,0 +1,13 @@
+{
+  "name": "interactivevis-templates-test",
+  "private": true,
+  "description": "Playwright smoke tests for the InteractiveVis map templates",
+  "type": "module",
+  "scripts": {
+    "serve": "node serve.mjs",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}
