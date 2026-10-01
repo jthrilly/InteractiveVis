@@ -42,6 +42,30 @@ describe("normalizeConfig", () => {
     expect(config.camera.maxRatio).toBeCloseTo(1 / 0.75);
   });
 
+  it("fills keys missing from a supplied block with sigma 0.1's own defaults, as the old viewer did", () => {
+    const config = normalizeConfig({
+      type: "network",
+      sigma: { drawingProperties: { defaultLabelSize: 20 }, graphProperties: { maxNodeSize: 9 }, mouseProperties: { maxRatio: 10 } },
+    });
+    expect(config.labels.size).toBe(20);
+    expect(config.edgeStyle).toBe("line");
+    expect(config.labels.renderedSizeThreshold).toBe(6);
+    expect(config.labels.weight).toBe("normal");
+    expect(config.nodeSize).toEqual({ min: 0, max: 9 });
+    expect(config.edgeSize).toEqual({ min: 0, max: 0 });
+    expect(config.camera.minRatio).toBeCloseTo(0.1);
+    expect(config.camera.maxRatio).toBeCloseTo(1);
+  });
+
+  it("reads sigma 0.1's colour settings", () => {
+    expect(normalizeConfig({ type: "network" }).colors).toEqual({ defaultNode: "#aaa", defaultEdge: "#aaa", edgeMode: "source" });
+    const config = normalizeConfig({
+      type: "network",
+      sigma: { drawingProperties: { edgeColor: "default", defaultEdgeColor: "#123", defaultNodeColor: "#456" } },
+    });
+    expect(config.colors).toEqual({ defaultNode: "#456", defaultEdge: "#123", edgeMode: "default" });
+  });
+
   it("treats false, empty and the plugin's None choices as unset", () => {
     for (const value of [false, "", "None", "None (Default)"]) {
       const config = normalizeConfig({ type: "network", features: { groupSelectorAttribute: value } });

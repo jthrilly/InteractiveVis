@@ -8,6 +8,9 @@ export type HoverBehavior = "default" | "dim" | "hide";
 /** Edge styles accepted in `sigma.drawingProperties.defaultEdgeType`. */
 export type EdgeStyle = "line" | "curve" | "arrow" | "curvedArrow";
 
+/** sigma 0.1 `edgeColor`: which colour an edge without its own colour takes. */
+export type EdgeColorMode = "source" | "target" | "default";
+
 /** config.json exactly as written today. Every key may be missing. */
 export interface RawConfig {
   type?: string;
@@ -50,6 +53,7 @@ export interface ViewerConfig {
   groupBy: string | null;
   informationPanel: { groupByEdgeDirection: boolean; imageAttribute: string | null };
   edgeStyle: EdgeStyle;
+  colors: { defaultNode: string; defaultEdge: string; edgeMode: EdgeColorMode };
   nodeSize: SizeRange;
   edgeSize: SizeRange;
   labels: {
@@ -64,8 +68,9 @@ export interface ViewerConfig {
   camera: { minRatio: number; maxRatio: number };
 }
 
-// Defaults match the sigma 0.1 viewer's main.js and ConfigFile.setDefaults().
-const DRAWING_DEFAULTS = {
+// When a whole block is missing, the sigma 0.1 viewer's main.js supplied
+// these (ConfigFile.setDefaults() in the plugin writes the same values).
+const MAINJS_DRAWING = {
   defaultLabelColor: "#000",
   defaultLabelSize: 14,
   defaultLabelBGColor: "#ddd",
@@ -75,8 +80,30 @@ const DRAWING_DEFAULTS = {
   defaultEdgeType: "curve",
   fontStyle: "bold",
 };
-const GRAPH_DEFAULTS = { minNodeSize: 1, maxNodeSize: 7, minEdgeSize: 0.2, maxEdgeSize: 0.5 };
-const MOUSE_DEFAULTS = { minRatio: 0.75, maxRatio: 20 };
+const MAINJS_GRAPH = { minNodeSize: 1, maxNodeSize: 7, minEdgeSize: 0.2, maxEdgeSize: 0.5 };
+const MAINJS_MOUSE = { minRatio: 0.75, maxRatio: 20 };
+
+// When a block is present, main.js passed it to sigma 0.1 as it was, so
+// keys missing from it took sigma 0.1's own defaults.
+const SIGMA01_DRAWING = {
+  defaultLabelColor: "#000",
+  defaultLabelSize: 12,
+  defaultLabelBGColor: "#fff",
+  defaultHoverLabelBGColor: "#fff",
+  defaultLabelHoverColor: "#000",
+  labelThreshold: 6,
+  defaultEdgeType: "line",
+  fontStyle: "",
+  edgeColor: "source",
+  defaultEdgeColor: "#aaa",
+  defaultNodeColor: "#aaa",
+};
+const SIGMA01_GRAPH = { minNodeSize: 0, maxNodeSize: 0, minEdgeSize: 0, maxEdgeSize: 0 };
+const SIGMA01_MOUSE = { minRatio: 1, maxRatio: 32 };
+
+function settingsBlock(block: Record<string, unknown> | undefined, whenMissing: object, sigmaDefaults: object): Record<string, unknown> {
+  return block && typeof block === "object" ? { ...sigmaDefaults, ...block } : { ...sigmaDefaults, ...whenMissing };
+}
 
 export class ConfigError extends Error {}
 
@@ -122,6 +149,11 @@ export function toEdgeStyle(value: unknown): EdgeStyle {
   }
 }
 
+function toEdgeColorMode(value: unknown): EdgeColorMode {
+  const v = typeof value === "string" ? value.toLowerCase() : "";
+  return v === "target" || v === "default" ? v : "source";
+}
+
 function toHover(value: unknown): HoverBehavior {
   const v = typeof value === "string" ? value.toLowerCase() : "";
   return v === "dim" || v === "hide" ? v : "default";
@@ -131,14 +163,14 @@ export function normalizeConfig(raw: RawConfig): ViewerConfig {
   if (!raw || raw.type !== "network") {
     throw new ConfigError('Invalid configuration: "type" must be "network".');
   }
-  const drawing = { ...DRAWING_DEFAULTS, ...(raw.sigma?.drawingProperties ?? {}) };
-  const graph = { ...GRAPH_DEFAULTS, ...(raw.sigma?.graphProperties ?? {}) };
-  const mouse = { ...MOUSE_DEFAULTS, ...(raw.sigma?.mouseProperties ?? {}) };
+  const drawing = settingsBlock(raw.sigma?.drawingProperties, MAINJS_DRAWING, SIGMA01_DRAWING);
+  const graph = settingsBlock(raw.sigma?.graphProperties, MAINJS_GRAPH, SIGMA01_GRAPH);
+  const mouse = settingsBlock(raw.sigma?.mouseProperties, MAINJS_MOUSE, SIGMA01_MOUSE);
 
   // sigma 0.1 ratios are zoom factors (20 = 20x zoomed in); sigma 3 camera
   // ratios are the inverse (0.05 = 20x zoomed in).
-  const minZoom = num(mouse.minRatio, MOUSE_DEFAULTS.minRatio);
-  const maxZoom = num(mouse.maxRatio, MOUSE_DEFAULTS.maxRatio);
+  const minZoom = num(mouse.minRatio, SIGMA01_MOUSE.minRatio);
+  const maxZoom = num(mouse.maxRatio, SIGMA01_MOUSE.maxRatio);
 
   return {
     data: str(raw.data, "data.json"),
@@ -168,26 +200,31 @@ export function normalizeConfig(raw: RawConfig): ViewerConfig {
       imageAttribute: optionalName(raw.informationPanel?.imageAttribute),
     },
     edgeStyle: toEdgeStyle(drawing.defaultEdgeType),
+    colors: {
+      defaultNode: str(drawing.defaultNodeColor, SIGMA01_DRAWING.defaultNodeColor),
+      defaultEdge: str(drawing.defaultEdgeColor, SIGMA01_DRAWING.defaultEdgeColor),
+      edgeMode: toEdgeColorMode(drawing.edgeColor),
+    },
     nodeSize: {
-      min: num(graph.minNodeSize, GRAPH_DEFAULTS.minNodeSize),
-      max: num(graph.maxNodeSize, GRAPH_DEFAULTS.maxNodeSize),
+      min: num(graph.minNodeSize, SIGMA01_GRAPH.minNodeSize),
+      max: num(graph.maxNodeSize, SIGMA01_GRAPH.maxNodeSize),
     },
     edgeSize: {
-      min: num(graph.minEdgeSize, GRAPH_DEFAULTS.minEdgeSize),
-      max: num(graph.maxEdgeSize, GRAPH_DEFAULTS.maxEdgeSize),
+      min: num(graph.minEdgeSize, SIGMA01_GRAPH.minEdgeSize),
+      max: num(graph.maxEdgeSize, SIGMA01_GRAPH.maxEdgeSize),
     },
     labels: {
-      color: str(drawing.defaultLabelColor, DRAWING_DEFAULTS.defaultLabelColor),
-      size: num(drawing.defaultLabelSize, DRAWING_DEFAULTS.defaultLabelSize),
-      weight: str(drawing.fontStyle, DRAWING_DEFAULTS.fontStyle),
-      background: str(drawing.defaultLabelBGColor, DRAWING_DEFAULTS.defaultLabelBGColor),
-      hoverBackground: str(drawing.defaultHoverLabelBGColor, DRAWING_DEFAULTS.defaultHoverLabelBGColor),
-      hoverColor: str(drawing.defaultLabelHoverColor, DRAWING_DEFAULTS.defaultLabelHoverColor),
-      renderedSizeThreshold: num(drawing.labelThreshold, DRAWING_DEFAULTS.labelThreshold),
+      color: str(drawing.defaultLabelColor, SIGMA01_DRAWING.defaultLabelColor),
+      size: num(drawing.defaultLabelSize, SIGMA01_DRAWING.defaultLabelSize),
+      weight: str(drawing.fontStyle, SIGMA01_DRAWING.fontStyle).trim() || "normal",
+      background: str(drawing.defaultLabelBGColor, SIGMA01_DRAWING.defaultLabelBGColor),
+      hoverBackground: str(drawing.defaultHoverLabelBGColor, SIGMA01_DRAWING.defaultHoverLabelBGColor),
+      hoverColor: str(drawing.defaultLabelHoverColor, SIGMA01_DRAWING.defaultLabelHoverColor),
+      renderedSizeThreshold: num(drawing.labelThreshold, SIGMA01_DRAWING.labelThreshold),
     },
     camera: {
-      minRatio: maxZoom > 0 ? 1 / maxZoom : 1 / MOUSE_DEFAULTS.maxRatio,
-      maxRatio: minZoom > 0 ? 1 / minZoom : 1 / MOUSE_DEFAULTS.minRatio,
+      minRatio: maxZoom > 0 ? 1 / maxZoom : 1 / SIGMA01_MOUSE.maxRatio,
+      maxRatio: minZoom > 0 ? 1 / minZoom : 1 / SIGMA01_MOUSE.minRatio,
     },
   };
 }
