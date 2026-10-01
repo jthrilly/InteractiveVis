@@ -59,6 +59,9 @@ describe("listGroups", () => {
       ["Class 10", ["a"]],
     ]);
     expect(findGroup(groups, "class 10")?.members).toEqual(["a"]);
+    const spaced = [{ name: " Spaced ", color: "#000", members: ["x"] }];
+    expect(findGroup(spaced, " spaced ")?.name).toBe(" Spaced ");
+    expect(findGroup([{ name: "Spaced", color: "#000", members: ["x"] }], " spaced ")?.name).toBe("Spaced");
   });
 });
 

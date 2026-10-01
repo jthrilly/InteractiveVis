@@ -38,6 +38,8 @@ function hashFor(name: string): string {
   return `#${encodeURIComponent(name)}`;
 }
 
+const DIALOG_ENTRY = { ivisDialog: true };
+
 function readHash(): string {
   const raw = window.location.hash.slice(1);
   try {
@@ -324,17 +326,21 @@ export class ViewerUI {
 
   private bindPane(): void {
     $("#pane-close").addEventListener("click", () => this.close());
-    // The link navigates to #information, which opens the dialog through route().
-    // When the hash is already #information, hashchange won't fire, so open it here.
+    // The link adds a #information history entry, marked so that closing the
+    // dialog can step back off it instead of leaving a duplicate entry behind.
     $("#moreinformation-link").addEventListener("click", (event) => {
-      if (readHash() !== "information") return;
       event.preventDefault();
+      if (readHash() !== "information") history.pushState(DIALOG_ENTRY, "", "#information");
       if (!this.dialog.open) this.dialog.showModal();
     });
-    // Closing the dialog leaves #information without adding a history entry,
-    // putting back the hash of whatever the pane still shows.
     this.dialog.addEventListener("close", () => {
       if (readHash() !== "information") return;
+      if ((history.state as typeof DIALOG_ENTRY | null)?.ivisDialog) {
+        history.back();
+        return;
+      }
+      // A page opened straight at #information has nothing to step back to, so
+      // swap in the hash of whatever the pane still shows.
       const { selected, group } = this.state;
       const name = selected ? this.graph.getNodeAttribute(selected, "label") : group;
       history.replaceState(null, "", name ? hashFor(name) : window.location.pathname + window.location.search);
