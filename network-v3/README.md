@@ -32,7 +32,14 @@ Set `CHROMIUM_PATH` to use an already installed Chromium for `test:browser`.
   drawn only on edges not marked `false`; files without the field behave as before.
 - Exports can embed both files in `index.html` as
   `<script type="application/json" id="ivis-config">` and `id="ivis-data"`, so the page opens
-  from disk without a web server.
+  from disk without a web server. For that to work the build emits a classic deferred
+  script rather than an ES module, since browsers block module scripts on `file://` pages
+  (covered by a browser test).
+- When a `sigma` settings block is missing, the old viewer's defaults apply (curved edges,
+  label threshold 10, sizes 1-7). Keys missing from a block that is present take sigma 0.1's
+  own defaults, as before (straight edges, threshold 6, no rescaling).
+- `edgeColor` (`source`, `target`, `default`), `defaultEdgeColor` and `defaultNodeColor` are
+  honoured for elements without their own colour.
 - `.gexf` data files are read with `graphology-gexf`.
 
 ## How it renders

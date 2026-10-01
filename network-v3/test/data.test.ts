@@ -69,6 +69,24 @@ describe("buildGraph on a plugin export", () => {
     expect(buildGraph(data, pluginConfig).graph.getEdgeAttribute("0", "color")).toBe("rgb(255,0,0)");
   });
 
+  it("follows edgeColor target/default and colours uncoloured nodes #aaa", () => {
+    const data = json<RawData>("./fixtures/plugin-data.json");
+    delete data.edges[0].color;
+    delete data.nodes[0].color;
+    const target = normalizeConfig({ type: "network", sigma: { drawingProperties: { edgeColor: "target" } } });
+    const built = buildGraph(data, target).graph;
+    expect(built.getEdgeAttribute("0", "color")).toBe(built.getNodeAttribute(built.target("0"), "color"));
+    expect(built.getNodeAttribute(String(data.nodes[0].id), "color")).toBe("#aaa");
+    const plain = normalizeConfig({ type: "network", sigma: { drawingProperties: { edgeColor: "default", defaultEdgeColor: "#123" } } });
+    expect(buildGraph(data, plain).graph.getEdgeAttribute("0", "color")).toBe("#123");
+  });
+
+  it("counts missing sizes as 1 when finding the largest, so none exceeds the maximum", () => {
+    const data: RawData = { nodes: [{ id: "a", size: 0.5 }, { id: "b" }], edges: [] };
+    const { graph } = buildGraph(data, pluginConfig);
+    expect(graph.getNodeAttribute("b", "size")).toBeLessThanOrEqual(pluginConfig.nodeSize.max);
+  });
+
   it("groups by the chosen column, or by colour", () => {
     const byColumn = computeGroups(graph, "Modularity Class");
     expect(byColumn.by).toBe("Modularity Class");
@@ -114,6 +132,22 @@ describe("buildGraph on the sample networks", () => {
     graph.forEachNode((_key, attrs) => {
       expect(Number.isFinite(attrs.x) && Number.isFinite(attrs.y)).toBe(true);
       expect(attrs.attributes).not.toHaveProperty("x");
+    });
+  });
+});
+
+describe("GEXF without positions", () => {
+  it("places nodes at random like sigma 0.1 instead of stacking them at the origin", () => {
+    const gexf = `<?xml version="1.0" encoding="UTF-8"?>
+<gexf xmlns="http://gexf.net/1.3" version="1.3"><graph defaultedgetype="directed">
+<nodes><node id="a" label="A"/><node id="b" label="B"/><node id="c" label="C"/></nodes>
+<edges><edge id="0" source="a" target="b"/></edges></graph></gexf>`;
+    const { graph } = buildGraph(rawDataFromGexfGraph(parseGexf(MultiGraph, gexf)), pluginConfig);
+    const positions = new Set(graph.mapNodes((_k, a) => `${a.x},${a.y}`));
+    expect(positions.size).toBe(3);
+    graph.forEachNode((_k, a) => {
+      expect(Math.abs(a.x)).toBeLessThanOrEqual(100);
+      expect(Math.abs(a.y)).toBeLessThanOrEqual(100);
     });
   });
 });

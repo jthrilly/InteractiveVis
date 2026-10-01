@@ -73,8 +73,6 @@ export interface BuildReport {
   duplicateNodes: number;
 }
 
-const DEFAULT_COLOR = "rgb(102,102,102)";
-
 /**
  * sigma 0.1 rescaling (sigma.js `_core.graph.rescale`): sizes are divided by
  * the largest size, then mapped onto [min, max]. Both 0 leaves sizes as-is;
@@ -99,15 +97,22 @@ function parseDirected(value: unknown): boolean | undefined {
   return undefined;
 }
 
+/** Uses the same fallback size as buildGraph, so defaulted sizes can't exceed the range. */
 function largestSize(items: { size?: unknown }[]): number {
   let largest = 0;
-  for (const item of items) largest = Math.max(largest, finite(item.size, 0));
+  for (const item of items) largest = Math.max(largest, finite(item.size, 1));
   return largest;
+}
+
+/** Colour of an edge without its own, following sigma 0.1's `edgeColor` setting. */
+function edgeColor(graph: IVGraph, source: string, target: string, colors: ViewerConfig["colors"]): string {
+  if (colors.edgeMode === "default") return colors.defaultEdge;
+  return graph.getNodeAttribute(colors.edgeMode === "target" ? target : source, "color");
 }
 
 export function buildGraph(
   data: RawData,
-  config: Pick<ViewerConfig, "nodeSize" | "edgeSize">,
+  config: Pick<ViewerConfig, "nodeSize" | "edgeSize" | "colors">,
 ): { graph: IVGraph; report: BuildReport } {
   if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
     throw new Error('Invalid data: expected an object with "nodes" and "edges" arrays.');
@@ -130,7 +135,7 @@ export function buildGraph(
       y: finite(node.y, 0),
       size: nodeScale(rawSize),
       rawSize,
-      color: typeof node.color === "string" && node.color ? node.color : DEFAULT_COLOR,
+      color: typeof node.color === "string" && node.color ? node.color : config.colors.defaultNode,
       attributes: { ...(node.attributes ?? {}) },
     });
   }
@@ -148,8 +153,7 @@ export function buildGraph(
       label: edge.label != null ? String(edge.label) : "",
       size: edgeScale(rawSize),
       rawSize,
-      // sigma 0.1 drew uncoloured edges in their source node's colour.
-      color: typeof edge.color === "string" && edge.color ? edge.color : graph.getNodeAttribute(source, "color"),
+      color: typeof edge.color === "string" && edge.color ? edge.color : edgeColor(graph, source, target, config.colors),
       attributes: { ...(edge.attributes ?? {}) },
     };
     const directed = parseDirected(edge.directed);
@@ -197,8 +201,9 @@ export function rawDataFromGexfGraph(parsed: {
     nodes.push({
       id: key,
       label: attrs.label != null ? String(attrs.label) : undefined,
-      x: finite(attrs.x, 0),
-      y: finite(attrs.y, 0),
+      // Like sigma 0.1's GEXF parser, place nodes without a position at random.
+      x: finite(attrs.x, 100 - 200 * Math.random()),
+      y: finite(attrs.y, 100 - 200 * Math.random()),
       size: finite(attrs.size, 1),
       color: typeof attrs.color === "string" ? attrs.color : undefined,
       attributes: splitAttributes(attrs, GEXF_NODE_KEYS),
